@@ -293,19 +293,15 @@ fn feed_forward(
     // x = layer.w21 * x + layer.b21
     let x = layer.w21.matmul(x, backend)?.add(&layer.b21, backend)?;
 
-    // This formula is based on the paper that introduced GELU.
-    // https://arxiv.org/abs/1606.08415
-    // x = (tanh.((x .^ 3 * 0.044715f0 + x) * √(2.0f0 / π)) .+ 1.0f0) .* x * 0.5f0
-    let x = x
-        .mul(&x, backend)?
-        .mul(&x, backend)?
+    // (exp.(x * -1.702f0) .+ 1.0f0)
+    let denominator = x
         .mul(&model.c2, backend)?
-        .add(&x, backend)?
-        .mul(&model.c3, backend)?
-        .tanh(backend)?
-        .add(&model.c4, backend)?
-        .mul(&x, backend)?
-        .mul(&model.c5, backend)?;
+        .exp(backend)?
+        .add(&model.c3, backend)?;
+
+    // Quick GELU
+    // x = x ./ (exp.(x * -1.702f0) .+ 1.0f0)
+    let x = x.div(&denominator, backend)?;
 
     // x = layer.w22 * x + layer.b22
     let x = layer.w22.matmul(&x, backend)?.add(&layer.b22, backend)?;
@@ -351,15 +347,12 @@ pub fn transformer(
     // x = layer_norm(x, model.gf, model.tf, model)
     x = layer_norm(&x, &model.gf, &model.tf, model, backend)?;
 
-    // x = transpose(model.wte) * x
-    x = model.wte_transposed.matmul(&x, backend)?;
-
     Ok(x)
 }
 
 // Pretty-print a 2D `TypedTensor` for debug.
 #[allow(dead_code)]
-fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
+pub fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
     if tensor.shape().len() != 2 {
         return Err("`tensor` not 2D".into());
     }
