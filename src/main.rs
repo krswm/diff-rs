@@ -40,17 +40,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let (token_to_id, id_to_token) = {
+    let token_to_id: HashMap<String, usize> = {
         let path = &format!("{}/vocab.json", &args[1]);
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-
-        let token_to_id: HashMap<String, usize> = serde_json::from_reader(reader)?;
-        let id_to_token: HashMap<usize, String> = token_to_id
-            .iter()
-            .map(|(id, token)| (*token, id.clone()))
-            .collect();
-        (token_to_id, id_to_token)
+        serde_json::from_reader(reader)?
     };
 
     let ranks = {

@@ -48,7 +48,7 @@ pub fn tokenize(
     let raw_tokens: Vec<String> = input
         .to_lowercase()
         .split(char::is_whitespace)
-        .map(|word| encode_unique_encoding(word))
+        .map(encode_unique_encoding)
         .collect();
     let ids = {
         let mut ids = Vec::new();
@@ -100,7 +100,5 @@ pub fn tokenize(
         ids.push(token_to_id["<|endoftext|>"]);
         ids
     };
-    println!("{ids:?}");
-
     Ok(ids)
 }
