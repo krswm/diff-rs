@@ -70,7 +70,7 @@ pub fn get_model(
     let n_ctx = config["max_position_embeddings"].as_u64().unwrap() as usize;
     let n_embd = config["hidden_size"].as_u64().unwrap() as usize;
     let n_head = config["num_attention_heads"].as_u64().unwrap() as usize;
-    let n_layer = config["num_attention_layers"].as_u64().unwrap() as usize;
+    let n_layer = config["num_hidden_layers"].as_u64().unwrap() as usize;
     let vocab_size = config["vocab_size"].as_u64().unwrap() as usize;
 
     let e = {
@@ -124,18 +124,21 @@ pub fn get_model(
             let t1 = tensors[&format!("{prefix}.encoder.layers.{i}.layer_norm1.bias")]
                 .reshape(&[n_embd, 1], &mut backend)?;
             let w11 = {
-                let w11q = &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.q_proj.weight")];
-                let w11k = &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.k_proj.weight")];
-                let w11v = &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.v_proj.weight")];
+                let w11q =
+                    &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.q_proj.weight")];
+                let w11k =
+                    &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.k_proj.weight")];
+                let w11v =
+                    &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.v_proj.weight")];
                 let mut colmaj = Vec::with_capacity(3 * n_embd * n_embd);
-                for row in 0..n_embd {
-                    for col in 0..n_embd {
+                for col in 0..n_embd {
+                    for row in 0..n_embd {
                         colmaj.push(*w11q.get(&[row, col])?);
                     }
-                    for col in 0..n_embd {
+                    for row in 0..n_embd {
                         colmaj.push(*w11k.get(&[row, col])?);
                     }
-                    for col in 0..n_embd {
+                    for row in 0..n_embd {
                         colmaj.push(*w11v.get(&[row, col])?);
                     }
                 }
@@ -147,19 +150,18 @@ pub fn get_model(
                 let b11v = &tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.v_proj.bias")];
                 let mut colmaj = Vec::with_capacity(3 * n_embd);
                 for row in 0..n_embd {
-                    for col in 0..n_embd {
-                        colmaj.push(*b11q.get(&[row, col])?);
-                    }
-                    for col in 0..n_embd {
-                        colmaj.push(*b11k.get(&[row, col])?);
-                    }
-                    for col in 0..n_embd {
-                        colmaj.push(*b11v.get(&[row, col])?);
-                    }
+                    colmaj.push(*b11q.get(&[row])?);
+                }
+                for row in 0..n_embd {
+                    colmaj.push(*b11k.get(&[row])?);
+                }
+                for row in 0..n_embd {
+                    colmaj.push(*b11v.get(&[row])?);
                 }
                 TypedTensor::<f32>::from_vec_col_major(vec![n_embd * 3, 1], colmaj)?
             };
-            let w12 = tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.out_proj.weight")].duplicate()?;
+            let w12 = tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.out_proj.weight")]
+                .duplicate()?;
             validate_shape(&w12, [n_embd, n_embd])?;
             let b12 = tensors[&format!("{prefix}.encoder.layers.{i}.self_attn.out_proj.bias")]
                 .reshape(&[n_embd, 1], &mut backend)?;
@@ -167,11 +169,13 @@ pub fn get_model(
                 .reshape(&[n_embd, 1], &mut backend)?;
             let t2 = tensors[&format!("{prefix}.encoder.layers.{i}.layer_norm2.bias")]
                 .reshape(&[n_embd, 1], &mut backend)?;
-            let w21 = tensors[&format!("{prefix}.encoder.layers.{i}.mlp.fc1.weight")].duplicate()?;
+            let w21 =
+                tensors[&format!("{prefix}.encoder.layers.{i}.mlp.fc1.weight")].duplicate()?;
             validate_shape(&w21, [n_embd * 4, n_embd])?;
             let b21 = tensors[&format!("{prefix}.encoder.layers.{i}.mlp.fc1.bias")]
                 .reshape(&[n_embd * 4, 1], &mut backend)?;
-            let w22 = tensors[&format!("{prefix}.encoder.layers.{i}.mlp.fc2.weight")].duplicate()?;
+            let w22 =
+                tensors[&format!("{prefix}.encoder.layers.{i}.mlp.fc2.weight")].duplicate()?;
             validate_shape(&w22, [n_embd, n_embd * 4])?;
             let b22 = tensors[&format!("{prefix}.encoder.layers.{i}.mlp.fc2.bias")]
                 .reshape(&[n_embd, 1], &mut backend)?;
@@ -217,6 +221,3 @@ pub fn get_model(
     };
     Ok(model)
 }
-
-// "no entry found for key"?
-// Maybe I left some silly typos in `format!` :P
