@@ -26,7 +26,7 @@ use tenferro_runtime::{TypedTensor, TypedTensorOpsExt};
 
 pub mod loader;
 pub mod model;
-// pub mod tokenizer;
+pub mod tokenizer;
 // pub mod transformer;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -89,19 +89,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         model::get_model(tensors, config)?
     };
 
-    /*
     // ==== Tokenization ====
 
     // Token IDs
-    let ids = tokenizer::tokenize(&token_to_id, &ranks, &args[3])?;
-    if ids.is_empty() {
-        println!("Your prompt should not be empty.");
-        return Ok(());
-    } else if ids.len() >= model.n_ctx {
-        println!("Your prompt exceeds the context length. Try shorter prompt.");
-        return Ok(());
-    }
-    */
+    let ids = tokenizer::tokenize(&token_to_id, &ranks, &model, &args[2])?;
 
     /*
     // ==== Inference ====

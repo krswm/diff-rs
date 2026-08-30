@@ -17,9 +17,10 @@
 use std::collections::HashMap;
 use std::error::Error;
 
-// GPT-2 has a unique encoding.
-// e.g.: 'Ġ' (U+0120) → 0x20
+use crate::model::Model;
 
+// CLIP has a unique encoding.
+// e.g.: 'à' (U+00E0) is encoded as "Ãł" (U+00C3 0+0142)
 fn encode_unique_encoding(text: &str) -> String {
     text.bytes()
         .map(|x| {
@@ -37,94 +38,30 @@ fn encode_unique_encoding(text: &str) -> String {
         .collect()
 }
 
-pub fn decode_unique_encoding(text: &str, utf8_buffer: &mut Vec<u8>) -> String {
-    let new_buffer: Vec<u8> = text
-        .chars()
-        .map(|x| {
-            let y = x as u32;
-            (match y {
-                0x0100..=0x0120 => y - 0x0100, // 0x00..=0x20
-                0x0021..=0x007E => y,          // 0x21..=0x7E
-                0x0121..=0x0142 => y - 0x00A2, // 0x7F..=0xA0
-                0x00A1..=0x00AC => y,          // 0xA1..=0xAC
-                0x0143 => 0xAD,                // 0xAD (0xAD is SOFT HYPHEN)
-                0x00AE..=0x00FF => y,          // 0xAE..=0xFF
-                _ => 0,
-            }) as u8
-        })
-        .collect();
-
-    // A token may contain only a part of UTF-8 sequence.
-    // Decode it incrementally.
-
-    let mut buffer = utf8_buffer.clone();
-    buffer.extend(new_buffer);
-    utf8_buffer.clear();
-
-    let mut decoded = String::new();
-    loop {
-        match std::str::from_utf8(&buffer) {
-            Ok(valid) => {
-                decoded.push_str(valid);
-                return decoded;
-            }
-            Err(err) => {
-                let (valid, remaining) = buffer.split_at(err.valid_up_to());
-                decoded.push_str(std::str::from_utf8(valid).unwrap());
-
-                if let Some(invalid_len) = err.error_len() {
-                    decoded.push(char::REPLACEMENT_CHARACTER);
-                    buffer = remaining[invalid_len..].to_vec();
-                } else {
-                    *utf8_buffer = remaining.to_vec();
-                    return decoded;
-                }
-            }
-        }
-    }
-}
-
-/// Tokenize `input` with the BPE algorithm.
+// Tokenize `input` with the BPE algorithm.
 pub fn tokenize(
     token_to_id: &HashMap<String, usize>,
     ranks: &HashMap<(String, String), u32>,
+    model: &Model,
     input: &str,
 ) -> Result<Vec<usize>, Box<dyn Error>> {
-    // Split `input` by "\n" and " " and get `raw_tokens`.
-    // "\n" is a `raw_token` by itself.
-    // " " is attached to the next word.
-    let raw_tokens: Vec<String> = {
-        let mut raw_tokens = Vec::new();
-        for (i_line, line) in input.split("\n").enumerate() {
-            if i_line >= 1 {
-                raw_tokens.push(String::from("\n"));
-            }
-
-            for (i_word, word) in line.split(" ").enumerate() {
-                if i_word == 0 && !word.is_empty() {
-                    raw_tokens.push(word.to_string());
-                } else if i_word >= 1 {
-                    raw_tokens.push(format!(" {word}"));
-                }
-            }
-        }
-        raw_tokens
-            .iter()
-            .map(|raw_token| encode_unique_encoding(raw_token))
-            .collect()
-    };
-
-    // Token IDs
+    let raw_tokens: Vec<String> = input
+        .to_lowercase()
+        .split(char::is_whitespace)
+        .map(|word| encode_unique_encoding(word))
+        .collect();
     let ids = {
         let mut ids = Vec::new();
         for raw_token in raw_tokens.iter() {
-            if token_to_id.contains_key(raw_token) {
+            if token_to_id.contains_key(&format!("{raw_token}</w>")) {
                 // `raw_token` is already a valid token.
-                ids.push(token_to_id[raw_token]);
+                ids.push(token_to_id[&format!("{raw_token}</w>")]);
             } else {
                 // `raw_token` is not a valid token.
                 // Split `raw_token` and get valid tokens with the merge algorithm.
                 let mut tokens: Vec<String> = raw_token.chars().map(|x| x.to_string()).collect();
+                let len = tokens.len();
+                tokens[len - 1] = format!("{}</w>", tokens[len - 1]);
                 while tokens.len() >= 2 {
                     let pairs = {
                         let mut pairs = Vec::with_capacity(tokens.len() - 1);
@@ -160,5 +97,9 @@ pub fn tokenize(
         ids
     };
 
+    println!("{ids:?}");
+
     Ok(ids)
 }
+
+// Tokenizer Ok!
