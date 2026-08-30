@@ -24,12 +24,10 @@ use serde_json::Value;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorOpsExt};
 
-/*
 pub mod loader;
-pub mod model;
-pub mod tokenizer;
-pub mod transformer;
-*/
+// pub mod model;
+// pub mod tokenizer;
+// pub mod transformer;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
@@ -77,6 +75,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         ranks
     };
 
+    let tensors = {
+        let path = &format!("{}/model.safetensors", &args[1]);
+        loader::load_safetensors(path)?
+    };
+    let config: HashMap<String, Value> = {
+        let path = &format!("{}/config.json", &args[1]);
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader)?
+    };
     /*
     let model = {
         let tensors = {
