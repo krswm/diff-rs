@@ -52,6 +52,7 @@ pub fn tokenize(
         .collect();
     let ids = {
         let mut ids = Vec::new();
+        ids.push(tokens_to_id["<|startoftext|>"]);
         for raw_token in raw_tokens.iter() {
             if token_to_id.contains_key(&format!("{raw_token}</w>")) {
                 // `raw_token` is already a valid token.
@@ -96,10 +97,9 @@ pub fn tokenize(
         }
         ids
     };
-
-    println!("{ids:?}");
+    let len = ids.len();
+    ids.extend(vec![tokens_to_id["<|endoftext|>"]; model.n_ctx - len - 1]);
+    ids.push(tokens_to_id["<|endoftext|>"]);
 
     Ok(ids)
 }
-
-// Tokenizer Ok!
