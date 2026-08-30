@@ -24,17 +24,19 @@ use serde_json::Value;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorOpsExt};
 
+/*
 pub mod loader;
 pub mod model;
 pub mod tokenizer;
 pub mod transformer;
+*/
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
+    if args.len() != 3 {
         println!("GPT-2 Inference with tenferro");
         println!(
-            "Usage: \x1b[1m{} <path to model repository> <sampling temperature> <your prompt>\x1b[22m",
+            "Usage: \x1b[1m{} <path to model repository> <your prompt>\x1b[22m",
             &args[0]
         );
         println!("You may have to enclose 'your prompt' with quotes.");
@@ -75,6 +77,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ranks
     };
 
+    /*
     let model = {
         let tensors = {
             let path = &format!("{}/model.safetensors", &args[1]);
@@ -88,20 +91,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         model::get_model(tensors, config)?
     };
+    */
 
-    let (is_deterministic, beta) = {
-        let temperature: f32 = args[2].parse()?;
-        if temperature < 0.0f32 {
-            println!("Temperature must be ≥ 0.0.");
-            return Ok(());
-        }
-        let value = 1.0f32 / temperature;
-        (
-            temperature == 0.0f32,
-            TypedTensor::<f32>::from_vec_col_major(vec![], vec![value])?,
-        )
-    };
-
+    /*
     // ==== Tokenization ====
 
     // Token IDs
@@ -113,7 +105,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Your prompt exceeds the context length. Try shorter prompt.");
         return Ok(());
     }
+    */
 
+    /*
     // ==== Inference ====
 
     let mut num_prompted_tokens = 0usize;
@@ -223,6 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "tokens"
         }
     );
+    */
 
     Ok(())
 }
