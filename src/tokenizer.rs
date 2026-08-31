@@ -47,7 +47,7 @@ pub fn tokenize(
 ) -> Result<Vec<usize>, Box<dyn Error>> {
     let raw_tokens: Vec<String> = input
         .to_lowercase()
-        .split(char::is_whitespace)
+        .split_whitespace()
         .map(encode_unique_encoding)
         .collect();
     let ids = {
@@ -95,8 +95,7 @@ pub fn tokenize(
                 }
             }
         }
-        let len = ids.len();
-        ids.extend(vec![token_to_id["<|endoftext|>"]; model.n_ctx - len - 1]);
+        ids.resize(model.n_ctx - 1, token_to_id["<|endoftext|>"]);
         ids.push(token_to_id["<|endoftext|>"]);
         ids
     };
