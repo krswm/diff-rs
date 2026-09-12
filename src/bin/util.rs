@@ -5,6 +5,8 @@
 // - show
 //   Prints the edges of a tensor, for example, if A is 30x40 matrix show A[0, 0], A[29, 0], A[0, 39], and A[29, 39].
 //   so that I can compare the computation with reference implementation.
+// - randn
+//   Generates a tensor whose elements are random numbers sampled from the normal distribution.
 // - Nonlinear activation functions
 //   - silu
 //   - gelu
@@ -23,9 +25,13 @@
 
 use std::error::Error;
 
+use rand::SeedableRng;
+use rand::rngs::ChaCha20Rng;
+use rand_distr::{Distribution, Normal};
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
+#[allow(dead_code)]
 fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
     // TODO: Not elegant.
     if tensor.rank() == 0 {
@@ -150,6 +156,17 @@ fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[allow(dead_code)]
+fn randn(shape: Vec<usize>, rng: &mut ChaCha20Rng) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // Generates a tensor whose elements are random numbers sampled from the normal distribution.
+    let n_elements = shape.iter().copied().reduce(|a, b| a * b).unwrap();
+    let distr = Normal::new(0.0, 1.0)?;
+    let colmaj = distr.sample_iter(rng).take(n_elements).collect();
+    let tensor = TypedTensor::<f32>::from_vec_col_major(shape, colmaj)?;
+    Ok(tensor)
+}
+
+#[allow(dead_code)]
 fn silu(
     tensor: &TypedTensor<f32>,
     backend: &mut CpuBackend,
@@ -160,6 +177,7 @@ fn silu(
     Ok(tensor)
 }
 
+#[allow(dead_code)]
 fn gelu(
     tensor: &TypedTensor<f32>,
     backend: &mut CpuBackend,
@@ -188,12 +206,8 @@ fn gelu(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
-    let tensor = TypedTensor::<f32>::from_vec_col_major(vec![2, 2], vec![2.0, 1.0, 0.0, -1.0])?;
-    let tensor = silu(&tensor, &mut backend)?;
-    show(&tensor)?;
-    let tensor = TypedTensor::<f32>::from_vec_col_major(vec![2, 2], vec![2.0, 1.0, 0.0, -1.0])?;
-    let tensor = gelu(&tensor, &mut backend)?;
+    let mut rng = ChaCha20Rng::seed_from_u64(2269);
+    let tensor = randn(vec![2, 2], &mut rng)?;
     show(&tensor)?;
     Ok(())
 }
