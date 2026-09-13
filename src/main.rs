@@ -128,11 +128,16 @@ pub mod loader;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lnref1 = loader::load_safetensors("../../Downloads/lnref1.safetensors")?;
-    let lnref2 = loader::load_safetensors("../../Downloads/lnref2.safetensors")?;
+    let gnref1 = loader::load_safetensors("../../Downloads/gnref1.safetensors")?;
+    let gnref2 = loader::load_safetensors("../../Downloads/gnref2.safetensors")?;
     let mut backend = CpuBackend::new();
+    util::show(&gnref1["x"]);
     println!();
-    let tensor = util::layernorm(&lnref1["x"], &lnref2["g"], &lnref2["t"], &mut backend)?;
+    util::show(&gnref2["g"]);
+    println!();
+    util::show(&gnref2["t"]);
+    println!();
+    let tensor = util::groupnorm(&gnref1["x"], &gnref2["g"], &gnref2["t"], 32, &mut backend)?;
     util::show(&tensor)?;
     Ok(())
 }

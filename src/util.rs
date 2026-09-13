@@ -220,36 +220,87 @@ pub fn layernorm(
     let weight = weight.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
     let bias = bias.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
 
-    // mean(tensor, dims = (1, 2, 3))
+    // mean(tensor, dims = 3)
     // ∑ x / count
     let tensor_mean = tensor
         .reduce_sum(&[2], backend)?
         .div(&count, backend)?
         .reshape(&[num_x, num_y, 1, num_n], backend)?; // [x, y, 1, n]
-    show(&tensor_mean)?;
-    println!();
 
     // tensor .- tensor_mean
     let tensor_residual = tensor.sub(&tensor_mean, backend)?; // [x, y, c, n]
 
-    // var(tensor, corrected = false, dims = (1, 2, 3))
+    // var(tensor, corrected = false, dims = 3)
     // ∑ (x - ⟨x⟩)² / count
     let tensor_var = tensor_residual
         .mul(&tensor_residual, backend)?
         .reduce_sum(&[2], backend)?
         .div(&count, backend)?
-        .reshape(&[num_x, num_y, 1, num_n], backend)?; // [1, 1, 1, n]
-    show(&tensor_var)?;
-    println!();
+        .reshape(&[num_x, num_y, 1, num_n], backend)?; // [x, y, 1, n]
 
     // √(tensor_var .+ epsilon)
-    let denominator = tensor_var.add(&epsilon, backend)?.sqrt(backend)?; // [1, 1, 1, n]
+    let denominator = tensor_var.add(&epsilon, backend)?.sqrt(backend)?; // [x, y, 1, n]
 
     // (tensor .- tensor_mean) ./ √(tensor_var .+ epsilon) .* weight .+ bias
     let tensor = tensor_residual
         .div(&denominator, backend)?
         .mul(&weight, backend)?
-        .add(&bias, backend)?;
+        .add(&bias, backend)?; // [x, y, c, n]
+
+    Ok(tensor)
+}
+
+pub fn groupnorm(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    num_g: usize, // Size of a group
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // tensor [x, y, c, n]
+    // weight [c]
+    // bias   [c]
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_c = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let num_i = num_c / num_g; // Number of indices inside a group
+    let count =
+        TypedTensor::<f32>::from_vec_col_major(vec![], vec![(num_x * num_y * num_i) as f32])?;
+        // Notice this differs from layernorm!
+    let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![0.00001f32])?;
+    let tensor = tensor.reshape(&[num_x, num_y, num_i, num_g, num_n], backend)?; // [x, y, i, g, n]
+    let weight = weight.reshape(&[1, 1, num_i, num_g, 1], backend)?; // [1, 1, i, g, 1]
+    let bias = bias.reshape(&[1, 1, num_i, num_g, 1], backend)?; // [1, 1, i, g, 1]
+
+    // mean(tensor, dims = 3)
+    // ∑ x / count
+    let tensor_mean = tensor // [x, y, i, g, n]
+        .reduce_sum(&[0, 1, 2], backend)? // [1, 1, g, n] // Notice this differs from layernorm as well!
+        .div(&count, backend)? // [1, 1, g, n]
+        .reshape(&[1, 1, 1, num_g, num_n], backend)?; // [1, 1, 1, g, n]
+
+    // tensor .- tensor_mean
+    let tensor_residual = tensor.sub(&tensor_mean, backend)?; // [x, y, i, g, n]
+
+    // var(tensor, corrected = false, dims = 3)
+    // ∑ (x - ⟨x⟩)² / count
+    let tensor_var = tensor_residual // [x, y, i, g, n]
+        .mul(&tensor_residual, backend)? // [x, y, i, g, n]
+        .reduce_sum(&[0, 1, 2], backend)? // [1, 1, g, n]
+        .div(&count, backend)? // [1, 1, g, n]
+        .reshape(&[1, 1, 1, num_g, num_n], backend)?; // [1, 1, 1, g, n]
+
+    // √(tensor_var .+ epsilon)
+    let denominator = tensor_var.add(&epsilon, backend)?.sqrt(backend)?; // [1, 1, 1, g, n]
+
+    // (tensor .- tensor_mean) ./ √(tensor_var .+ epsilon) .* weight .+ bias
+    let tensor = tensor_residual // [x, y, i, g, n]
+        .div(&denominator, backend)? // [x, y, i, g, n]
+        .mul(&weight, backend)? // [x, y, i, g, n]
+        .add(&bias, backend)? // [x, y, i, g, n]
+        .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [x, y, c, n]
 
     Ok(tensor)
 }
