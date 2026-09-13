@@ -205,6 +205,50 @@ fn gelu(
     Ok(tensor)
 }
 
+#[allow(dead_code)]
+fn layernorm(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // tensor [x, y, c, n]
+    // weight [c]
+    // bias   [c]
+
+    let num_c = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let n = TypedTensor::<f32>::from_vec_col_major(vec![], vec![num_n as f32])?;
+    let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![1.0E-5f32])?;
+    let weight = weight.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
+    let bias = bias.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
+
+    // mean(tensor, dims = (1, 2, 3))
+    // ∑ x / n
+    let tensor_mean = tensor.reduce_sum(&[0, 1, 2], backend)?.div(&n, backend)?; // [1, 1, 1, n]
+
+    // tensor .- tensor_mean
+    let tensor_residual = tensor.sub(&tensor_mean, backend)?; // [1, 1, 1, n]
+
+    // var(tensor, corrected = false, dims = (1, 2, 3))
+    // ∑ (x - ⟨x⟩)² / n
+    let tensor_var = tensor_residual
+        .mul(&tensor_residual, backend)?
+        .reduce_sum(&[0, 1, 2], backend)?
+        .div(&n, backend)?; // [1, 1, 1, n]
+
+    // √(tensor_var .+ epsilon)
+    let denominator = tensor_var.add(&epsilon, backend)?.sqrt(backend)?; // [1, 1, 1, n]
+
+    // bias .* (tensor .- tensor_mean) ./ √(tensor_var .+ epsilon) .+ bias
+    let tensor = weight
+        .mul(&tensor_residual, backend)?
+        .div(&denominator, backend)?
+        .add(&bias, backend)?;
+
+    Ok(tensor)
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rng = ChaCha20Rng::seed_from_u64(2269);
     let tensor = randn(vec![2, 2], &mut rng)?;
