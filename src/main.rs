@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+/*
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
@@ -114,5 +115,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     transformer::show(&x)?;
 
+    Ok(())
+}
+*/
+
+use std::error::Error;
+
+use tenferro_cpu::CpuBackend;
+use tenferro_runtime::TypedTensor;
+
+pub mod loader;
+pub mod util;
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let lnref1 = loader::load_safetensors("../../Downloads/lnref1.safetensors")?;
+    let lnref2 = loader::load_safetensors("../../Downloads/lnref2.safetensors")?;
+    let mut backend = CpuBackend::new();
+    println!();
+    let tensor = util::layernorm(&lnref1["x"], &lnref2["g"], &lnref2["t"], &mut backend)?;
+    util::show(&tensor)?;
     Ok(())
 }

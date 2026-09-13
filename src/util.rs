@@ -31,8 +31,7 @@ use rand_distr::{Distribution, Normal};
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-#[allow(dead_code)]
-fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
+pub fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
     // TODO: Not elegant.
     if tensor.rank() == 0 {
         println!("[]: {:+15.6e}", tensor.get(&[])?);
@@ -156,8 +155,7 @@ fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[allow(dead_code)]
-fn randn(shape: Vec<usize>, rng: &mut ChaCha20Rng) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+pub fn randn(shape: Vec<usize>, rng: &mut ChaCha20Rng) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // Generates a tensor whose elements are random numbers sampled from the normal distribution.
     let n_elements = shape.iter().copied().reduce(|a, b| a * b).unwrap();
     let distr = Normal::new(0.0, 1.0)?;
@@ -166,8 +164,7 @@ fn randn(shape: Vec<usize>, rng: &mut ChaCha20Rng) -> Result<TypedTensor<f32>, B
     Ok(tensor)
 }
 
-#[allow(dead_code)]
-fn silu(
+pub fn silu(
     tensor: &TypedTensor<f32>,
     backend: &mut CpuBackend,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
@@ -177,8 +174,7 @@ fn silu(
     Ok(tensor)
 }
 
-#[allow(dead_code)]
-fn gelu(
+pub fn gelu(
     tensor: &TypedTensor<f32>,
     backend: &mut CpuBackend,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
@@ -205,8 +201,7 @@ fn gelu(
     Ok(tensor)
 }
 
-#[allow(dead_code)]
-fn layernorm(
+pub fn layernorm(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
@@ -216,42 +211,45 @@ fn layernorm(
     // weight [c]
     // bias   [c]
 
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
     let num_c = tensor.shape()[2];
     let num_n = tensor.shape()[3];
-    let n = TypedTensor::<f32>::from_vec_col_major(vec![], vec![num_n as f32])?;
-    let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![1.0E-5f32])?;
+    let count = TypedTensor::<f32>::from_vec_col_major(vec![], vec![num_c as f32])?;
+    let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![0.00001f32])?;
     let weight = weight.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
     let bias = bias.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
 
     // mean(tensor, dims = (1, 2, 3))
-    // ∑ x / n
-    let tensor_mean = tensor.reduce_sum(&[0, 1, 2], backend)?.div(&n, backend)?; // [1, 1, 1, n]
+    // ∑ x / count
+    let tensor_mean = tensor
+        .reduce_sum(&[2], backend)?
+        .div(&count, backend)?
+        .reshape(&[num_x, num_y, 1, num_n], backend)?; // [x, y, 1, n]
+    show(&tensor_mean)?;
+    println!();
 
     // tensor .- tensor_mean
-    let tensor_residual = tensor.sub(&tensor_mean, backend)?; // [1, 1, 1, n]
+    let tensor_residual = tensor.sub(&tensor_mean, backend)?; // [x, y, c, n]
 
     // var(tensor, corrected = false, dims = (1, 2, 3))
-    // ∑ (x - ⟨x⟩)² / n
+    // ∑ (x - ⟨x⟩)² / count
     let tensor_var = tensor_residual
         .mul(&tensor_residual, backend)?
-        .reduce_sum(&[0, 1, 2], backend)?
-        .div(&n, backend)?; // [1, 1, 1, n]
+        .reduce_sum(&[2], backend)?
+        .div(&count, backend)?
+        .reshape(&[num_x, num_y, 1, num_n], backend)?; // [1, 1, 1, n]
+    show(&tensor_var)?;
+    println!();
 
     // √(tensor_var .+ epsilon)
     let denominator = tensor_var.add(&epsilon, backend)?.sqrt(backend)?; // [1, 1, 1, n]
 
-    // bias .* (tensor .- tensor_mean) ./ √(tensor_var .+ epsilon) .+ bias
-    let tensor = weight
-        .mul(&tensor_residual, backend)?
+    // (tensor .- tensor_mean) ./ √(tensor_var .+ epsilon) .* weight .+ bias
+    let tensor = tensor_residual
         .div(&denominator, backend)?
+        .mul(&weight, backend)?
         .add(&bias, backend)?;
 
     Ok(tensor)
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
-    let mut rng = ChaCha20Rng::seed_from_u64(2269);
-    let tensor = randn(vec![2, 2], &mut rng)?;
-    show(&tensor)?;
-    Ok(())
 }
