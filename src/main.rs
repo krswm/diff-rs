@@ -121,6 +121,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 use std::error::Error;
 
+use rand::SeedableRng;
+use rand::rngs::ChaCha20Rng;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::TypedTensor;
 
@@ -128,16 +130,11 @@ pub mod loader;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let gnref1 = loader::load_safetensors("../../Downloads/gnref1.safetensors")?;
-    let gnref2 = loader::load_safetensors("../../Downloads/gnref2.safetensors")?;
-    let mut backend = CpuBackend::new();
-    util::show(&gnref1["x"]);
+    let mut rng = ChaCha20Rng::seed_from_u64(2269);
+    let tensor = util::randn(vec![64, 64, 320, 2], &mut rng)?;
+    util::show(&tensor)?;
     println!();
-    util::show(&gnref2["g"]);
-    println!();
-    util::show(&gnref2["t"]);
-    println!();
-    let tensor = util::groupnorm(&gnref1["x"], &gnref2["g"], &gnref2["t"], 32, &mut backend)?;
+    let tensor = util::upsample(&tensor)?;
     util::show(&tensor)?;
     Ok(())
 }

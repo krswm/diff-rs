@@ -268,7 +268,7 @@ pub fn groupnorm(
     let num_i = num_c / num_g; // Number of indices inside a group
     let count =
         TypedTensor::<f32>::from_vec_col_major(vec![], vec![(num_x * num_y * num_i) as f32])?;
-        // Notice this differs from layernorm!
+    // Notice this differs from layernorm!
     let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![0.00001f32])?;
     let tensor = tensor.reshape(&[num_x, num_y, num_i, num_g, num_n], backend)?; // [x, y, i, g, n]
     let weight = weight.reshape(&[1, 1, num_i, num_g, 1], backend)?; // [1, 1, i, g, 1]
@@ -301,6 +301,36 @@ pub fn groupnorm(
         .mul(&weight, backend)? // [x, y, i, g, n]
         .add(&bias, backend)? // [x, y, i, g, n]
         .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [x, y, c, n]
+
+    Ok(tensor)
+}
+
+pub fn upsample(tensor: &TypedTensor<f32>) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // tensor [x, y, c, n]
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_c = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+
+    let colmaj = {
+        let mut colmaj = Vec::with_capacity((2 * num_x) * (2 * num_y) * num_c * num_n);
+        for n in 0..num_n {
+            for c in 0..num_c {
+                for new_y in 0..(2 * num_y) {
+                    for new_x in 0..(2 * num_x) {
+                        let x = new_x / 2;
+                        let y = new_y / 2;
+                        colmaj.push(*tensor.get(&[x, y, c, n])?);
+                    }
+                }
+            }
+        }
+        colmaj
+    };
+
+    let tensor =
+        TypedTensor::<f32>::from_vec_col_major(vec![2 * num_x, 2 * num_y, num_c, num_n], colmaj)?;
 
     Ok(tensor)
 }
