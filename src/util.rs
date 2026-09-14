@@ -155,6 +155,113 @@ pub fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+pub fn cshow(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
+    // For debugging `conv`.
+
+    let num_rows = tensor.shape()[0];
+    let num_cols = tensor.shape()[1];
+
+    println!(
+        "┏{:━^15}┯{:━^15}┯{:━^15}┯{:━^15}┯{:━^15}┯{:━^15}┯{:━^15}┓ ╮",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} │ {:^13} │ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} ┃ │",
+        tensor.get(&[0, 0, 0, 0]).unwrap(),
+        tensor.get(&[0, 1, 0, 0]).unwrap(),
+        tensor.get(&[0, 2, 0, 0]).unwrap(),
+        "⋯",
+        tensor.get(&[0, num_cols - 3, 0, 0]).unwrap(),
+        tensor.get(&[0, num_cols - 2, 0, 0]).unwrap(),
+        tensor.get(&[0, num_cols - 1, 0, 0]).unwrap(),
+    );
+    println!(
+        "┠{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┨ │",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} │ {:^13} │ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} ┃ │",
+        tensor.get(&[1, 0, 0, 0]).unwrap(),
+        tensor.get(&[1, 1, 0, 0]).unwrap(),
+        tensor.get(&[1, 2, 0, 0]).unwrap(),
+        "⋯",
+        tensor.get(&[1, num_cols - 3, 0, 0]).unwrap(),
+        tensor.get(&[1, num_cols - 2, 0, 0]).unwrap(),
+        tensor.get(&[1, num_cols - 1, 0, 0]).unwrap(),
+    );
+    println!(
+        "┠{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┨ │",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} │ {:^13} │ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} ┃ │",
+        tensor.get(&[2, 0, 0, 0]).unwrap(),
+        tensor.get(&[2, 1, 0, 0]).unwrap(),
+        tensor.get(&[2, 2, 0, 0]).unwrap(),
+        "⋯",
+        tensor.get(&[2, num_cols - 3, 0, 0]).unwrap(),
+        tensor.get(&[2, num_cols - 2, 0, 0]).unwrap(),
+        tensor.get(&[2, num_cols - 1, 0, 0]).unwrap(),
+    );
+    println!(
+        "┠{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┨ │",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:^13} │ {:^13} │ {:^13} │ {:13} │ {:^13} │ {:^13} │ {:^13} ┃ {num_rows}",
+        "⋮", "⋮", "⋮", "", "⋮", "⋮", "⋮"
+    );
+    println!(
+        "┠{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┨ │",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} │ {:^13} │ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} ┃ │",
+        tensor.get(&[num_rows - 3, 0, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 3, 1, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 3, 2, 0, 0]).unwrap(),
+        "⋯",
+        tensor.get(&[num_rows - 3, num_cols - 3, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 3, num_cols - 2, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 3, num_cols - 1, 0, 0]).unwrap(),
+    );
+    println!(
+        "┠{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┨ │",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} │ {:^13} │ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} ┃ │",
+        tensor.get(&[num_rows - 2, 0, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 2, 1, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 2, 2, 0, 0]).unwrap(),
+        "⋯",
+        tensor.get(&[num_rows - 2, num_cols - 3, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 2, num_cols - 2, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 2, num_cols - 1, 0, 0]).unwrap(),
+    );
+    println!(
+        "┠{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┼{:─^15}┨ │",
+        "", "", "", "", "", "", ""
+    );
+    println!(
+        "┃ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} │ {:^13} │ {:<+13.6e} │ {:<+13.6e} │ {:<+13.6e} ┃ │",
+        tensor.get(&[num_rows - 1, 0, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 1, 1, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 1, 2, 0, 0]).unwrap(),
+        "⋯",
+        tensor.get(&[num_rows - 1, num_cols - 3, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 1, num_cols - 2, 0, 0]).unwrap(),
+        tensor.get(&[num_rows - 1, num_cols - 1, 0, 0]).unwrap(),
+    );
+    println!(
+        "┗{:━^15}┷{:━^15}┷{:━^15}┷{:━^15}┷{:━^15}┷{:━^15}┷{:━^15}┛ ╯",
+        "", "", "", "", "", "", ""
+    );
+    println!("╰{num_cols:─^111}╯");
+
+    Ok(())
+}
+
 pub fn randn(shape: Vec<usize>, rng: &mut ChaCha20Rng) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // Generates a tensor whose elements are random numbers sampled from the normal distribution.
     let n_elements = shape.iter().copied().reduce(|a, b| a * b).unwrap();

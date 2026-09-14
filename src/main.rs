@@ -132,9 +132,6 @@ pub mod util;
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rng = ChaCha20Rng::seed_from_u64(2269);
     let tensor = util::randn(vec![64, 64, 320, 2], &mut rng)?;
-    util::show(&tensor)?;
-    println!();
-    let tensor = util::upsample(&tensor)?;
-    util::show(&tensor)?;
+    util::cshow(&tensor)?;
     Ok(())
 }
