@@ -9,7 +9,7 @@
 
 use std::error::Error;
 
-use tenferro_ext_sparse::SparseCooTensor;
+use tenferro_ext_sparse::{SparseCooTensor, sparse_matmul_eager};
 // ??? What crate do I have to add to Cargo.toml?
 // ---
 // Reading the sparse's Cargo.toml, I find it has `publish = false`
@@ -36,13 +36,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     println!("{sparse:?}");
 
-    let identity = Tensor::from_vec_col_major(vec![2, 2], vec![1.0, 0.0, 0.0, 1.0])?;
+    // let identity = Tensor::from_vec_col_major(vec![2, 2], vec![1.0, 0.0, 0.0, 1.0])?;
 
-    let backend = CpuBackend::new();
+    // let backend = CpuBackend::new();
 
     // let result = sparse.matmul(&identity, &mut backend)?;  // No?
 
-    println!("{result:?}");
+    // let result = [&sparse, &identity].einsum("ij,jk->ik", &mut backend)?;  // No?
+
+    let identity = SparseCooTensor::from_parts(
+        vec![2, 2],
+        Tensor::from_vec_col_major(vec![2, 2], vec![0i64,0, 1,1])?,
+        Tensor::from_vec_col_major(vec![2], vec![1.0, 1.0])?,
+    )?;
+
+    // let result = [&sparse, &identity].einsum("ij,jk->ik", &mut backend)?;  // No?
+
+    // let result = sparse.mul(identity, &mut backend)?;  // No?
+
+    // let result = sparse_matmul_eager(&sparse, &identity)?;  // OK!
+
+    // 2 1  .  2 1  =  7 2
+    // 3 0     3 0     6 3
+
+    let result = sparse_matmul_eager(&sparse, &sparse)?;
+
+    // println!("{result:?}");
+
+    // println!("{}", result.get(&[0, 0])?);  // No?
 
     Ok(())
 }
