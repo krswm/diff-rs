@@ -7,6 +7,7 @@
 //   so that I can compare the computation with reference implementation.
 // - randn
 //   Generates a tensor whose elements are random numbers sampled from the normal distribution.
+// - softmax
 // - Nonlinear activation functions
 //   - silu
 //   - gelu
@@ -150,6 +151,134 @@ pub fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
                 i3,
                 i4,
                 tensor.get(&[i0, i1, i2, i3, i4])?
+            );
+        }
+    } else if tensor.rank() == 6 {
+        let shape = tensor.shape();
+        for (i0, i1, i2, i3, i4, i5) in [
+            (0, 0, 0, 0, 0, 0),
+            (shape[0] - 1, 0, 0, 0, 0, 0),
+            (0, shape[1] - 1, 0, 0, 0, 0),
+            (shape[0] - 1, shape[1] - 1, 0, 0, 0, 0),
+            (0, 0, shape[2] - 1, 0, 0, 0),
+            (shape[0] - 1, 0, shape[2] - 1, 0, 0, 0),
+            (0, shape[1] - 1, shape[2] - 1, 0, 0, 0),
+            (shape[0] - 1, shape[1] - 1, shape[2] - 1, 0, 0, 0),
+            (0, 0, 0, shape[3] - 1, 0, 0),
+            (shape[0] - 1, 0, 0, shape[3] - 1, 0, 0),
+            (0, shape[1] - 1, 0, shape[3] - 1, 0, 0),
+            (shape[0] - 1, shape[1] - 1, 0, shape[3] - 1, 0, 0),
+            (0, 0, shape[2] - 1, shape[3] - 1, 0, 0),
+            (shape[0] - 1, 0, shape[2] - 1, shape[3] - 1, 0, 0),
+            (0, shape[1] - 1, shape[2] - 1, shape[3] - 1, 0, 0),
+            (shape[0] - 1, shape[1] - 1, shape[2] - 1, shape[3] - 1, 0, 0),
+            (0, 0, 0, 0, shape[4] - 1, 0),
+            (shape[0] - 1, 0, 0, 0, shape[4] - 1, 0),
+            (0, shape[1] - 1, 0, 0, shape[4] - 1, 0),
+            (shape[0] - 1, shape[1] - 1, 0, 0, shape[4] - 1, 0),
+            (0, 0, shape[2] - 1, 0, shape[4] - 1, 0),
+            (shape[0] - 1, 0, shape[2] - 1, 0, shape[4] - 1, 0),
+            (0, shape[1] - 1, shape[2] - 1, 0, shape[4] - 1, 0),
+            (shape[0] - 1, shape[1] - 1, shape[2] - 1, 0, shape[4] - 1, 0),
+            (0, 0, 0, shape[3] - 1, shape[4] - 1, 0),
+            (shape[0] - 1, 0, 0, shape[3] - 1, shape[4] - 1, 0),
+            (0, shape[1] - 1, 0, shape[3] - 1, shape[4] - 1, 0),
+            (shape[0] - 1, shape[1] - 1, 0, shape[3] - 1, shape[4] - 1, 0),
+            (0, 0, shape[2] - 1, shape[3] - 1, shape[4] - 1, 0),
+            (shape[0] - 1, 0, shape[2] - 1, shape[3] - 1, shape[4] - 1, 0),
+            (0, shape[1] - 1, shape[2] - 1, shape[3] - 1, shape[4] - 1, 0),
+            (
+                shape[0] - 1,
+                shape[1] - 1,
+                shape[2] - 1,
+                shape[3] - 1,
+                shape[4] - 1,
+                0,
+            ),
+            (0, 0, 0, 0, 0, shape[5] - 1),
+            (shape[0] - 1, 0, 0, 0, 0, shape[5] - 1),
+            (0, shape[1] - 1, 0, 0, 0, shape[5] - 1),
+            (shape[0] - 1, shape[1] - 1, 0, 0, 0, shape[5] - 1),
+            (0, 0, shape[2] - 1, 0, 0, shape[5] - 1),
+            (shape[0] - 1, 0, shape[2] - 1, 0, 0, shape[5] - 1),
+            (0, shape[1] - 1, shape[2] - 1, 0, 0, shape[5] - 1),
+            (shape[0] - 1, shape[1] - 1, shape[2] - 1, 0, 0, shape[5] - 1),
+            (0, 0, 0, shape[3] - 1, 0, shape[5] - 1),
+            (shape[0] - 1, 0, 0, shape[3] - 1, 0, shape[5] - 1),
+            (0, shape[1] - 1, 0, shape[3] - 1, 0, shape[5] - 1),
+            (shape[0] - 1, shape[1] - 1, 0, shape[3] - 1, 0, shape[5] - 1),
+            (0, 0, shape[2] - 1, shape[3] - 1, 0, shape[5] - 1),
+            (shape[0] - 1, 0, shape[2] - 1, shape[3] - 1, 0, shape[5] - 1),
+            (0, shape[1] - 1, shape[2] - 1, shape[3] - 1, 0, shape[5] - 1),
+            (
+                shape[0] - 1,
+                shape[1] - 1,
+                shape[2] - 1,
+                shape[3] - 1,
+                0,
+                shape[5] - 1,
+            ),
+            (0, 0, 0, 0, shape[4] - 1, shape[5] - 1),
+            (shape[0] - 1, 0, 0, 0, shape[4] - 1, shape[5] - 1),
+            (0, shape[1] - 1, 0, 0, shape[4] - 1, shape[5] - 1),
+            (shape[0] - 1, shape[1] - 1, 0, 0, shape[4] - 1, shape[5] - 1),
+            (0, 0, shape[2] - 1, 0, shape[4] - 1, shape[5] - 1),
+            (shape[0] - 1, 0, shape[2] - 1, 0, shape[4] - 1, shape[5] - 1),
+            (0, shape[1] - 1, shape[2] - 1, 0, shape[4] - 1, shape[5] - 1),
+            (
+                shape[0] - 1,
+                shape[1] - 1,
+                shape[2] - 1,
+                0,
+                shape[4] - 1,
+                shape[5] - 1,
+            ),
+            (0, 0, 0, shape[3] - 1, shape[4] - 1, shape[5] - 1),
+            (shape[0] - 1, 0, 0, shape[3] - 1, shape[4] - 1, shape[5] - 1),
+            (0, shape[1] - 1, 0, shape[3] - 1, shape[4] - 1, shape[5] - 1),
+            (
+                shape[0] - 1,
+                shape[1] - 1,
+                0,
+                shape[3] - 1,
+                shape[4] - 1,
+                shape[5] - 1,
+            ),
+            (0, 0, shape[2] - 1, shape[3] - 1, shape[4] - 1, shape[5] - 1),
+            (
+                shape[0] - 1,
+                0,
+                shape[2] - 1,
+                shape[3] - 1,
+                shape[4] - 1,
+                shape[5] - 1,
+            ),
+            (
+                0,
+                shape[1] - 1,
+                shape[2] - 1,
+                shape[3] - 1,
+                shape[4] - 1,
+                shape[5] - 1,
+            ),
+            (
+                shape[0] - 1,
+                shape[1] - 1,
+                shape[2] - 1,
+                shape[3] - 1,
+                shape[4] - 1,
+                shape[5] - 1,
+            ),
+        ] {
+            println!(
+                "[{:6}, {:6}, {:6}, {:6}, {:6}, {:6}]: {:<+.6e}",
+                i0,
+                i1,
+                i2,
+                i3,
+                i4,
+                i5,
+                tensor.get(&[i0, i1, i2, i3, i4, i5])?
             );
         }
     }
@@ -490,16 +619,20 @@ pub fn self_attention(
     let k = TypedTensor::<f32>::from_vec_col_major(
         vec![num_x, num_y, num_n, num_i, num_h],
         chunks.next().unwrap().to_vec(),
-    )?; // [x, y, n, j, k] (I'll call it j and k to match with einsum.)
+    )?; // [X, Y, n, i, h] (I'll call them X and Y so that they match with `einsum`.)
     let v = TypedTensor::<f32>::from_vec_col_major(
         vec![num_x, num_y, num_n, num_i, num_h],
         chunks.next().unwrap().to_vec(),
     )?; // [x, y, n, i, h]
 
-    let tensor = [&k, &q].einsum("xynih,xynjk->xynhk", backend)?;
+    let tensor = [&k, &q].einsum("XYnih,xynih->XYxynh", backend)?; // [X, Y, x, y, n, h]
+
+    let sqrt_d = TypedTensor::<f32>::from_vec_col_major(vec![], vec![(num_i as f32).sqrt()])?;
+    let tensor = tensor.div(&sqrt_d, backend)?; // [X, Y, x, y, n, h]
+
+    let tensor = softmax(
 
     show(&tensor)?;
-    println!();
 
     Ok(())
 }
