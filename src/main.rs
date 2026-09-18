@@ -130,8 +130,25 @@ pub mod loader;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut rng = ChaCha20Rng::seed_from_u64(2269);
-    let tensor = util::randn(vec![64, 64, 320, 2], &mut rng)?;
-    util::cshow(&tensor)?;
+    let saref1 = loader::load_safetensors("../../Downloads/saref1.safetensors")?;
+    let saref2 = loader::load_safetensors("../../Downloads/saref2.safetensors")?;
+    /*
+    util::show(&saref1["x"])?;
+    println!();
+    util::show(&saref2["w1"])?;
+    println!();
+    util::show(&saref2["w2"])?;
+    println!();
+    util::show(&saref2["b2"])?;
+    */
+    let mut backend = CpuBackend::new();
+    util::self_attention(
+        &saref1["x"],
+        &saref2["w1"],
+        &saref2["w2"],
+        &saref2["b2"],
+        8,
+        &mut backend,
+    )?;
     Ok(())
 }

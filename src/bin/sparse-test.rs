@@ -19,19 +19,19 @@ use std::error::Error;
 
 // use tenferro_runtime::Tensor;
 // use tenferro_tensor::types::Tensor;
-use tenferro_cpu::CpuBackend;
-use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
-use rand_distr::{Distribution, Normal};
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
+use rand_distr::{Distribution, Normal};
 use std::time::Instant;
+use tenferro_cpu::CpuBackend;
 use tenferro_einsum::TypedTensorEinsumExt;
+use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 fn main() -> Result<(), Box<dyn Error>> {
     /*
     // 2.0 1.0
     // 3.0 0.0
-    
+
     // The indices of the non-zero values are: (0, 0), (0, 1), (1, 0)
     let coords = Tensor::from_vec_col_major(vec![2, 3], vec![0i64, 0, 0, 1, 1, 0])?;
 
@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // The shape of the tensor is: (2, 2)
     let sparse = SparseCooTensor::from_parts(vec![2, 2], coords, values)?;
-    
+
     println!("{sparse:?}");
 
     // let identity = Tensor::from_vec_col_major(vec![2, 2], vec![1.0, 0.0, 0.0, 1.0])?;

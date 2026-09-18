@@ -29,6 +29,7 @@ use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
 use rand_distr::{Distribution, Normal};
 use tenferro_cpu::CpuBackend;
+use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 pub fn show(tensor: &TypedTensor<f32>) -> Result<(), Box<dyn Error>> {
@@ -361,7 +362,7 @@ pub fn groupnorm(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
-    num_g: usize, // Size of a group
+    num_g: usize, // Number of groups
     backend: &mut CpuBackend,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [x, y, c, n]
@@ -440,4 +441,65 @@ pub fn upsample(tensor: &TypedTensor<f32>) -> Result<TypedTensor<f32>, Box<dyn E
         TypedTensor::<f32>::from_vec_col_major(vec![2 * num_x, 2 * num_y, num_c, num_n], colmaj)?;
 
     Ok(tensor)
+}
+
+pub fn self_attention(
+    tensor: &TypedTensor<f32>,
+    in_weight: &TypedTensor<f32>,
+    out_weight: &TypedTensor<f32>,
+    out_bias: &TypedTensor<f32>,
+    num_h: usize, // Number of heads
+    backend: &mut CpuBackend,
+) -> Result<(), Box<dyn Error>> {
+    // The model doesn't use in_bias anywhere so I won't support it here.
+    // (in other words, in_bias is a zero-vector)
+
+    // d:                     0 <= d < 3*num_c
+    // i: index inside a head 0 <= i < num_c/num_h
+
+    // tensor     [x, y, c, n]
+    // in_weight  [d, c]
+    // out_weight [c, c]
+    // out_bias   [c, c]
+
+    /*
+    show(&tensor)?;
+    println!();
+    show(&in_weight)?;
+    println!();
+    show(&out_weight)?;
+    println!();
+    show(&out_bias)?;
+    println!();
+    */
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_c = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let num_i = num_c / num_h;
+
+    let tensor = [in_weight, tensor].einsum("dc,xycn->xynd", backend)?; // [x, y, n, d]
+
+    // TODO: Maybe I have to consider using views or slices. tenferro supports them.
+    let mut chunks = tensor.host_data()?.chunks(num_x * num_y * num_n * num_c);
+    let q = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_n, num_i, num_h],
+        chunks.next().unwrap().to_vec(),
+    )?; // [x, y, n, i, h]
+    let k = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_n, num_i, num_h],
+        chunks.next().unwrap().to_vec(),
+    )?; // [x, y, n, j, k] (I'll call it j and k to match with einsum.)
+    let v = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_n, num_i, num_h],
+        chunks.next().unwrap().to_vec(),
+    )?; // [x, y, n, i, h]
+
+    let tensor = [&k, &q].einsum("xynih,xynjk->xynhk", backend)?;
+
+    show(&tensor)?;
+    println!();
+
+    Ok(())
 }
