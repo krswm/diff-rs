@@ -7,10 +7,10 @@
 //   so that I can compare the computation with reference implementation.
 // - randn
 //   Generates a tensor whose elements are random numbers sampled from the normal distribution.
-// - softmax
 // - Nonlinear activation functions
 //   - silu
 //   - gelu
+// - softmax
 // - Normalizations
 //   - layernorm
 //   - groupnorm
@@ -438,6 +438,39 @@ pub fn gelu(
     Ok(tensor)
 }
 
+pub fn softmax(
+    tensor: &TypedTensor<f32>,
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // tensor [X, Y, x, y, n, h]
+
+    let num_X = tensor.shape()[0];
+    let num_Y = tensor.shape()[1];
+    let num_x = tensor.shape()[2];
+    let num_y = tensor.shape()[3];
+    let num_n = tensor.shape()[4];
+    let num_h = tensor.shape()[5];
+
+    // TODO: Use views or slices instead.
+    let maximum = {
+        let colmaj: Vec<f32> = tensor
+            .host_data()?
+            .chunks(num_x * num_y) // as if [x, y, n, h][X, Y]
+            .map(|chunk| *chunk.iter().max_by(|a, b| a.total_cmp(b)).unwrap())
+            .collect();
+        TypedTensor::<f32>::from_vec_col_major(vec![1, 1, num_x, num_y, num_n, num_h], colmaj)?
+    }; // [1, 1, x, y, n, h]
+
+    let numerator = tensor.sub(&maximum, backend)?.exp(backend)?; // [X, Y, x, y, n, h]
+    let denominator = numerator
+        .reduce_sum(&[0, 1], backend)?
+        .reshape(&[1, 1, num_X, num_Y, num_n, num_h], backend)?; // [1, 1, x, y, n, h]
+
+    let tensor = numerator.div(&denominator, backend)?; // [X, Y, x, y, n, h]
+
+    Ok(tensor)
+}
+
 pub fn layernorm(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
@@ -591,17 +624,6 @@ pub fn self_attention(
     // out_weight [c, c]
     // out_bias   [c, c]
 
-    /*
-    show(&tensor)?;
-    println!();
-    show(&in_weight)?;
-    println!();
-    show(&out_weight)?;
-    println!();
-    show(&out_bias)?;
-    println!();
-    */
-
     let num_x = tensor.shape()[0];
     let num_y = tensor.shape()[1];
     let num_c = tensor.shape()[2];
@@ -625,12 +647,19 @@ pub fn self_attention(
         chunks.next().unwrap().to_vec(),
     )?; // [x, y, n, i, h]
 
+    // Kᵀ Q
     let tensor = [&k, &q].einsum("XYnih,xynih->XYxynh", backend)?; // [X, Y, x, y, n, h]
 
     let sqrt_d = TypedTensor::<f32>::from_vec_col_major(vec![], vec![(num_i as f32).sqrt()])?;
+
+    // Kᵀ Q / √d
     let tensor = tensor.div(&sqrt_d, backend)?; // [X, Y, x, y, n, h]
 
-    let tensor = softmax(
+    show(&tensor)?;
+    println!();
+
+    // softmax(Kᵀ Q / √d)
+    let tensor = softmax(&tensor, backend)?; // [X, Y, x, y, n, h]
 
     show(&tensor)?;
 
