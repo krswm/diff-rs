@@ -621,8 +621,8 @@ pub fn self_attention(
 
     // tensor     [x, y, c, n]
     // in_weight  [d, c]
-    // out_weight [c, c]
-    // out_bias   [c, c]
+    // out_weight [c, C]
+    // out_bias   [c]
 
     let num_x = tensor.shape()[0];
     let num_y = tensor.shape()[1];
@@ -645,7 +645,7 @@ pub fn self_attention(
     let v = TypedTensor::<f32>::from_vec_col_major(
         vec![num_x, num_y, num_n, num_i, num_h],
         chunks.next().unwrap().to_vec(),
-    )?; // [x, y, n, i, h]
+    )?; // [X, Y, n, i, h]
 
     // Kᵀ Q
     let tensor = [&k, &q].einsum("XYnih,xynih->XYxynh", backend)?; // [X, Y, x, y, n, h]
@@ -655,13 +655,21 @@ pub fn self_attention(
     // Kᵀ Q / √d
     let tensor = tensor.div(&sqrt_d, backend)?; // [X, Y, x, y, n, h]
 
-    show(&tensor)?;
-    println!();
-
     // softmax(Kᵀ Q / √d)
     let tensor = softmax(&tensor, backend)?; // [X, Y, x, y, n, h]
 
+    // V softmax(Kᵀ Q / √d)
+    let tensor = [&v, &tensor]
+        .einsum("XYnih,XYxynh->xyihn", backend)? // [x, y, i, h, n]
+        .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [x, y, C, n]
+
+    let out_bias = out_bias.reshape(&[1, 1, num_c, 1], backend)?;
+    let tensor = [&out_weight, &tensor]
+        .einsum("cC,xyCn->xycn", backend)? // [x, y, c, n]
+        .add(&out_bias, backend)?; // [x, y, c, n]
+
     show(&tensor)?;
+    // It's fun to use `einsum`!
 
     Ok(())
 }
