@@ -612,7 +612,7 @@ pub fn self_attention(
     out_bias: &TypedTensor<f32>,
     num_h: usize, // Number of heads
     backend: &mut CpuBackend,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // The model doesn't use in_bias anywhere so I won't support it here.
     // (in other words, in_bias is a zero-vector)
 
@@ -670,6 +670,101 @@ pub fn self_attention(
 
     show(&tensor)?;
     // It's fun to use `einsum`!
+
+    Ok(tensor)
+}
+
+pub fn cross_attention(
+    tensor_1: &TypedTensor<f32>,
+    tensor_2: &TypedTensor<f32>,
+    in_weight_q: &TypedTensor<f32>,
+    in_weight_k: &TypedTensor<f32>,
+    in_weight_v: &TypedTensor<f32>,
+    out_weight: &TypedTensor<f32>,
+    out_bias: &TypedTensor<f32>,
+    num_h: usize, // Number of heads
+    backend: &mut CpuBackend,
+) -> Result<(), Box<dyn Error>> {
+    /*
+    show(&in_weight_q)?;
+    println!();
+    show(&in_weight_k)?;
+    println!();
+    show(&in_weight_v)?;
+    println!();
+    show(&out_weight)?;
+    println!();
+    show(&out_bias)?;
+    println!();
+    show(&tensor_1)?;
+    println!();
+    show(&tensor_2)?;
+    println!();
+    */
+
+    // e: embedding of CLIP
+    // p: position of CLIP
+
+    // tensor_1    [x, y, c, n]
+    // tensor_2    [e, p, n]
+    // in_weight_q [C, c]
+    // in_weight_k [C, e]
+    // in_weight_v [C, e]
+    // out_weight  [c, C]
+    // out_bias    [c]
+
+    let num_x = tensor_1.shape()[0];
+    let num_y = tensor_1.shape()[1];
+    let num_c = tensor_1.shape()[2];
+    let num_n = tensor_1.shape()[3];
+    let num_p = tensor_2.shape()[1];
+    let num_i = num_c / num_h;
+
+    let q = [in_weight_q, tensor_1]
+        .einsum("Cc,xycn->Cxyn", backend)? // [C, x, y, n]
+        .reshape(&[num_i, num_h, num_x, num_y, num_n], backend)?; // [i, h, x, y, n]
+    let k = [in_weight_k, tensor_2]
+        .einsum("Ce,epn->Cpn", backend)? // [C, p, n]
+        .reshape(&[num_i, num_h, num_p, num_n], backend)?; // [i, h, p, n]
+    let v = [in_weight_v, tensor_2]
+        .einsum("Ce,epn->Cpn", backend)? // [C, p, n]
+        .reshape(&[num_i, num_h, num_p, num_n], backend)?; // [i, h, p, n]
+
+    // Kᵀ Q
+    let tensor = [&k, &q].einsum("ihpn,ihxyn->phxyn", backend)?; // [p, h, x, y, n]
+
+    let sqrt_d = TypedTensor::<f32>::from_vec_col_major(vec![], vec![(num_i as f32).sqrt()])?;
+
+    // Kᵀ Q / √d
+    let tensor = tensor.div(&sqrt_d, backend)?; // [p, h, x, y, n]
+
+    // softmax(Kᵀ Q / √d)
+    // numerically stable softmax over the p-axis
+    let maximum = {
+        let colmaj: Vec<f32> = tensor
+            .host_data()?
+            .chunks(num_p) // as if [h, x, y, n][p]
+            .map(|chunk| *chunk.iter().max_by(|a, b| a.total_cmp(b)).unwrap())
+            .collect();
+        TypedTensor::<f32>::from_vec_col_major(vec![1, num_h, num_x, num_y, num_n], colmaj)?
+    }; // [1, h, x, y, n]
+    let numerator = tensor.sub(&maximum, backend)?.exp(backend)?; // [p, h, x, y, n]
+    let denominator = numerator
+        .reduce_sum(&[0], backend)?
+        .reshape(&[1, num_h, num_x, num_y, num_n], backend)?; // [1, h, x, y, n]
+    let softmax = numerator.div(&denominator, backend)?; // [p, h, x, y, n]
+
+    // V softmax(Kᵀ Q / √d)
+    let tensor = [&v, &softmax]
+        .einsum("ihpn,phxyn->xyihn", backend)? // [i, h, x, y, n]
+        .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [i, h, C, n]
+
+    let out_bias = out_bias.reshape(&[1, 1, num_c, 1], backend)?;
+    let tensor = [&out_weight, &tensor]
+        .einsum("cC,xyCn->xycn", backend)? // [x, y, c, n]
+        .add(&out_bias, backend)?; // [x, y, c, n]
+
+    show(&tensor)?;
 
     Ok(())
 }

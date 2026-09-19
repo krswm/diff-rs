@@ -130,23 +130,17 @@ pub mod loader;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let saref1 = loader::load_safetensors("../../Downloads/saref1.safetensors")?;
-    let saref2 = loader::load_safetensors("../../Downloads/saref2.safetensors")?;
-    /*
-    util::show(&saref1["x"])?;
-    println!();
-    util::show(&saref2["w1"])?;
-    println!();
-    util::show(&saref2["w2"])?;
-    println!();
-    util::show(&saref2["b2"])?;
-    */
+    let caref1 = loader::load_safetensors("../../Downloads/caref1.safetensors")?;
+    let caref2 = loader::load_safetensors("../../Downloads/caref2.safetensors")?;
     let mut backend = CpuBackend::new();
-    util::self_attention(
-        &saref1["x"],
-        &saref2["w1"],
-        &saref2["w2"],
-        &saref2["b2"],
+    util::cross_attention(
+        &caref1["x"],
+        &caref1["y"],
+        &caref2["w1q"],
+        &caref2["w1k"],
+        &caref2["w1v"],
+        &caref2["w2"],
+        &caref2["b2"],
         8,
         &mut backend,
     )?;
