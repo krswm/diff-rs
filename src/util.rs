@@ -575,6 +575,73 @@ pub fn groupnorm(
     Ok(tensor)
 }
 
+pub fn conv31(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    backend: &mut CpuBackend,
+) -> Result<(), Box<dyn Error>> {
+    // "conv" -> 2D convolution
+    // "3" -> kernel size: 3x3 (padding: 1)
+    // "1" -> stride: 1
+
+    /*
+    show(&weight)?;
+    println!();
+    show(&bias)?;
+    println!();
+    show(&tensor)?;
+    println!();
+    */
+
+    // i: input channels
+    // o: output channels
+    // a: convolution weight, x-axis, 0 <= a < 3
+    // b: convolution weight, y-axis, 0 <= b < 3
+
+    // tensor [x, y, i, n]
+    // weight [a, b, i, o]
+    // bias   [o]
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_i = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let num_o = weight.shape()[3];
+
+    // I know there's a matmul-based algorithm,
+    // but it involves L^4-element tensor (where L is length of a side of tensor).
+    // There is a solution to use sparse tensor since the most of the elements
+    // of the L^4-element tensor is zero.
+    // However, I unfortunately am lacking knowledge on how to use sparse tensors in tenferro currently.
+    // I have to research more. It seems like tenferro accepts extension
+    // so I may be able to utilize it.
+    // Just for now, I'll implement 2D convolution naively
+    // and see how the performance is.
+
+    let x = 1;
+    let y = 1;
+    let o = 0;
+    let n = 0;
+
+    let mut ans = 0.0f32;
+    for i in 0..num_i {
+        ans += *weight.get(&[0, 0, i, o])? * *tensor.get(&[x - 1, y - 1, i, n])?;
+        ans += *weight.get(&[1, 0, i, o])? * *tensor.get(&[x,     y - 1, i, n])?;
+        ans += *weight.get(&[2, 0, i, o])? * *tensor.get(&[x + 1, y - 1, i, n])?;
+        ans += *weight.get(&[0, 1, i, o])? * *tensor.get(&[x - 1, y,     i, n])?;
+        ans += *weight.get(&[1, 1, i, o])? * *tensor.get(&[x,     y,     i, n])?;
+        ans += *weight.get(&[2, 1, i, o])? * *tensor.get(&[x + 1, y,     i, n])?;
+        ans += *weight.get(&[0, 2, i, o])? * *tensor.get(&[x - 1, y + 1, i, n])?;
+        ans += *weight.get(&[1, 2, i, o])? * *tensor.get(&[x,     y + 1, i, n])?;
+        ans += *weight.get(&[2, 2, i, o])? * *tensor.get(&[x + 1, y + 1, i, n])?;
+    }
+    ans += *bias.get(&[o])?;
+    println!("{ans:?}");
+    
+    Ok(())
+}
+
 pub fn upsample(tensor: &TypedTensor<f32>) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [x, y, c, n]
 
@@ -684,7 +751,7 @@ pub fn cross_attention(
     out_bias: &TypedTensor<f32>,
     num_h: usize, // Number of heads
     backend: &mut CpuBackend,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     /*
     show(&in_weight_q)?;
     println!();
@@ -766,5 +833,5 @@ pub fn cross_attention(
 
     show(&tensor)?;
 
-    Ok(())
+    Ok(tensor)
 }

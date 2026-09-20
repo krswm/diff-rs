@@ -130,19 +130,9 @@ pub mod loader;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let caref1 = loader::load_safetensors("../../Downloads/caref1.safetensors")?;
-    let caref2 = loader::load_safetensors("../../Downloads/caref2.safetensors")?;
+    let c31ref1 = loader::load_safetensors("../../Downloads/c31ref1.safetensors")?;
+    let c31ref2 = loader::load_safetensors("../../Downloads/c31ref2.safetensors")?;
     let mut backend = CpuBackend::new();
-    util::cross_attention(
-        &caref1["x"],
-        &caref1["y"],
-        &caref2["w1q"],
-        &caref2["w1k"],
-        &caref2["w1v"],
-        &caref2["w2"],
-        &caref2["b2"],
-        8,
-        &mut backend,
-    )?;
+    util::conv31(&c31ref1["x"], &c31ref2["wc"], &c31ref2["bc"], &mut backend)?;
     Ok(())
 }
