@@ -619,7 +619,9 @@ pub fn conv31(
     // Just for now, I'll implement 2D convolution naively
     // and see how the performance is.
 
-    let mut colmaj = Vec::new();
+    /*
+    // let mut colmaj = Vec::new();
+    let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
 
     for n in 0..num_n {
         for o in 0..num_o {
@@ -646,6 +648,44 @@ pub fn conv31(
 
     let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x, num_y, num_o, num_n], colmaj)?;
 
+    cshow(&result)?;
+    */
+
+    // Now, matmul-based algorithm but with dense tensor.
+
+    let num_z = num_x * num_y;
+
+    println!("#### A ####");
+    let ff = {
+        let mut colmaj = Vec::with_capacity(num_z * num_z * num_i * num_o);
+        for o in 0..num_o {
+            for i in 0..num_i {
+                for Z in 0..num_z {
+                    for z in 0..num_z {
+                        let value = 0.0;
+                        colmaj.push(value)
+                    }
+                }
+            }
+        }
+        TypedTensor::<f32>::from_vec_col_major(vec![num_z, num_z, num_i, num_o], colmaj)?
+    }; // [Z, z, i, o]
+
+    println!("#### B ####");
+    let ii = tensor.reshape(&[num_z, num_i, num_n], backend)?;  // [z, i, n]
+
+    println!("#### C ####");
+    /*
+    let result = [&ff, &ii]
+        .einsum("Zzio,zin->Zion", backend)? // [Z, i, o, n]
+        .reduce_sum(&[1], backend)? // [Z, o, n]
+        .reshape(&[num_x, num_y, num_o, num_n], backend)?; // [x, y, o, n]
+    */
+    let result = [&ff, &ii]
+        .einsum("Zzio,zin->Zon", backend)? // [Z, o, n]
+        .reshape(&[num_x, num_y, num_o, num_n], backend)?; // [x, y, o, n]
+
+    println!("#### D ####");
     cshow(&result)?;
     
     Ok(())
