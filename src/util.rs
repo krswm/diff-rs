@@ -619,25 +619,34 @@ pub fn conv31(
     // Just for now, I'll implement 2D convolution naively
     // and see how the performance is.
 
-    let x = 1;
-    let y = 1;
-    let o = 0;
-    let n = 0;
+    let mut colmaj = Vec::new();
 
-    let mut ans = 0.0f32;
-    for i in 0..num_i {
-        ans += *weight.get(&[0, 0, i, o])? * *tensor.get(&[x - 1, y - 1, i, n])?;
-        ans += *weight.get(&[1, 0, i, o])? * *tensor.get(&[x,     y - 1, i, n])?;
-        ans += *weight.get(&[2, 0, i, o])? * *tensor.get(&[x + 1, y - 1, i, n])?;
-        ans += *weight.get(&[0, 1, i, o])? * *tensor.get(&[x - 1, y,     i, n])?;
-        ans += *weight.get(&[1, 1, i, o])? * *tensor.get(&[x,     y,     i, n])?;
-        ans += *weight.get(&[2, 1, i, o])? * *tensor.get(&[x + 1, y,     i, n])?;
-        ans += *weight.get(&[0, 2, i, o])? * *tensor.get(&[x - 1, y + 1, i, n])?;
-        ans += *weight.get(&[1, 2, i, o])? * *tensor.get(&[x,     y + 1, i, n])?;
-        ans += *weight.get(&[2, 2, i, o])? * *tensor.get(&[x + 1, y + 1, i, n])?;
+    for n in 0..num_n {
+        for o in 0..num_o {
+            for y in 0..num_y {
+                for x in 0..num_x {
+                    let mut ans = 0.0f32;
+                    for i in 0..num_i {
+                        for a in 0..3 {
+                            for b in 0..3 {
+                                let xx = x + a - 1;
+                                let yy = y + b - 1;
+                                if xx >= 0 && xx < num_x && yy >= 0 && yy < num_y {
+                                    ans += *weight.get(&[a, b, i, o])? * *tensor.get(&[xx, yy, i, n])?;
+                                }
+                            }
+                        }
+                    }
+                    ans += *bias.get(&[o])?;
+                    colmaj.push(ans);
+                }
+            }
+        }
     }
-    ans += *bias.get(&[o])?;
-    println!("{ans:?}");
+
+    let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x, num_y, num_o, num_n], colmaj)?;
+
+    cshow(&result)?;
     
     Ok(())
 }

@@ -120,6 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 */
 
 use std::error::Error;
+use std::time::Instant;
 
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
@@ -133,6 +134,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let c31ref1 = loader::load_safetensors("../../Downloads/c31ref1.safetensors")?;
     let c31ref2 = loader::load_safetensors("../../Downloads/c31ref2.safetensors")?;
     let mut backend = CpuBackend::new();
+    let performance_timer = Instant::now();
     util::conv31(&c31ref1["x"], &c31ref2["wc"], &c31ref2["bc"], &mut backend)?;
+    let performance_time = performance_timer.elapsed().as_secs_f64();
+    println!("{performance_time} s");
+    // ~0.96 s for 64x64 2D convolution in-channel 4 -> out-channel 320 kernel 3x3...
     Ok(())
 }
