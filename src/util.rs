@@ -619,8 +619,8 @@ pub fn conv31(
     // Just for now, I'll implement 2D convolution naively
     // and see how the performance is.
 
-    /*
     // let mut colmaj = Vec::new();
+    /*
     let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
 
     for n in 0..num_n {
@@ -651,6 +651,7 @@ pub fn conv31(
     cshow(&result)?;
     */
 
+    /*
     // Now, matmul-based algorithm but with dense tensor.
 
     let num_z = num_x * num_y;
@@ -686,6 +687,39 @@ pub fn conv31(
         .reshape(&[num_x, num_y, num_o, num_n], backend)?; // [x, y, o, n]
 
     println!("#### D ####");
+    cshow(&result)?;
+    */
+
+    let aa = [weight, tensor].einsum("abio,xyin->abxyon", backend)?; // [a, b, x, y, o, n]
+    
+    let num_p = num_o * num_n;
+    
+    let aa = aa.reshape(&[3, 3, num_x, num_y, num_p], backend)?; // [a, b, x, y, p]
+
+    let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
+    for p in 0..num_p {
+        for y in 0..num_y {
+            for x in 0..num_x {
+                let mut ans = 0.0f32;
+                for a in 0..3 {
+                    for b in 0..3 {
+                        let xx = x + a - 1;
+                        let yy = y + b - 1;
+                        if xx >= 0 && xx < num_x && yy >= 0 && yy < num_y {
+                            ans += *aa.get(&[a, b, xx, yy, p])?;
+                        }
+                    }
+                }
+                colmaj.push(ans);
+            }
+        }
+    }
+
+    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [x, y, o, n]
+
+    let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x, num_y, num_o, num_n], colmaj)?; // [x, y, o, n]
+    let result = result.add(&bias, backend)?; // [x, y, o, n]
+
     cshow(&result)?;
     
     Ok(())
