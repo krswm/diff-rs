@@ -221,3 +221,35 @@ pub fn get_model(
     };
     Ok(model)
 }
+
+////
+
+// The model safetensor file seems to be constructed with
+// row-major engine (PyTorch etc.) in mind
+// (rightmost index varies the most, batch index is on the left).
+// However, tenferro is a col-major tensor library
+// (leftmost index varies the most, batch index is on the right).
+// Therefore I'll `transpose` the tensors from the safetensors file.
+//
+// Note that in fact `loader.rs` converts row-major to col-major as well
+// so what's I'm doing here is just reverting it.
+// I have to re-consider about my implementation...
+
+// decoder convolution
+pub struct Dconv {
+    pub wc: TypedTensor<f32>, // [x, y, i, o]
+    pub bc: TypedTensor<f32>, // [o]
+}
+
+pub fn get_model(
+    tensors: HashMap<String, TypedTensor<f32>>,
+    prefix: &str,
+) -> Result<Dconv, Box<dyn Error>> {
+    let mut backend = CpuBackend::new();
+   
+    let wc = tensors[&format!("{prefix}.weight")] // [o, i, y, x]
+        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
+    let bc = tensors[&format!("{prefix}.bias")]; // [o]
+
+    Dconv { wc, bc }
+}
