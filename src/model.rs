@@ -241,7 +241,7 @@ pub struct Dconv {
     pub bc: TypedTensor<f32>, // [o]
 }
 
-pub fn get_model(
+pub fn get_dconv(
     tensors: HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Dconv, Box<dyn Error>> {
@@ -251,5 +251,114 @@ pub fn get_model(
         .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
     let bc = tensors[&format!("{prefix}.bias")]; // [o]
 
-    Dconv { wc, bc }
+    let x = Dconv { wc, bc };
+    Ok(x)
+}
+
+// Decoder residual block
+pub struct Drblock {
+    pub g1: TypedTensor<f32>, // [c]
+    pub t1: TypedTensor<f32>, // [c]
+    pub wc1: TypedTensor<f32>, // [x, y, i, o]
+    pub bc1: TypedTensor<f32>, // [o]
+    pub g2: TypedTensor<f32>, // [c]
+    pub t2: TypedTensor<f32>, // [c]
+    pub wc2: TypedTensor<f32>, // [x, y, i, o]
+    pub bc2: TypedTensor<f32>, // [o]
+}
+
+pub fn get_drblock(
+    tensors: HashMap<String, TypedTensor<f32>>,
+    prefix: &str,
+) -> Result<Drblock, Box<dyn Error>> {
+    let mut backend = CpuBackend::new();
+
+    let g1 = tensors[&format!("{prefix}.norm1.weight")];
+    let t1 = tensors[&format!("{prefix}.norm1.bias")];
+    let wc1 = tensors[&format!("{prefix}.conv1.weight")] // [o, i, y, x]
+        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
+    let bc1 = tensors[&format!("{prefix}.conv1.bias")];
+    let g2 = tensors[&format!("{prefix}.norm2.weight"];
+    let t2 = tensors[&format!("{prefix}.norm2.bias"];
+    let wc2 = tensors[&format!("{prefix}.conv2.weight")] // [o, i, y, x]
+        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
+    let bc2 = tensors[&format!("{prefix}.conv2.bias")];
+
+    let x = Drblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2 };
+    Ok(x)
+}
+
+// Decoder residual block w/ additional convolution
+pub struct Drcblock {
+    pub g1: TypedTensor<f32>, // [c]
+    pub t1: TypedTensor<f32>, // [c]
+    pub wc1: TypedTensor<f32>, // [x, y, i, o]
+    pub bc1: TypedTensor<f32>, // [o]
+    pub g2: TypedTensor<f32>, // [c]
+    pub t2: TypedTensor<f32>, // [c]
+    pub wc2: TypedTensor<f32>, // [x, y, i, o]
+    pub bc2: TypedTensor<f32>, // [o]
+    pub wc3: TypedTensor<f32>, // [x, y, i, o]
+    pub bc3: TypedTensor<f32>, // [o]
+}
+
+pub fn get_drcblock(
+    tensors: HashMap<String, TypedTensor<f32>>,
+    prefix: &str,
+) -> Result<Drcblock, Box<dyn Error>> {
+    let mut backend = CpuBackend::new();
+
+    let g1 = tensors[&format!("{prefix}.norm1.weight")];
+    let t1 = tensors[&format!("{prefix}.norm1.bias")];
+    let wc1 = tensors[&format!("{prefix}.conv1.weight")] // [o, i, y, x]
+        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
+    let bc1 = tensors[&format!("{prefix}.conv1.bias")];
+    let g2 = tensors[&format!("{prefix}.norm2.weight"];
+    let t2 = tensors[&format!("{prefix}.norm2.bias"];
+    let wc2 = tensors[&format!("{prefix}.conv2.weight")] // [o, i, y, x]
+        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
+    let bc2 = tensors[&format!("{prefix}.conv2.bias")];
+    let wc3 = tensors[&format!("{prefix}.nin_shortcut.weight")] // [o, i, y, x]
+        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
+    let bc3 = tensors[&format!("{prefix}.nin_shortcut.bias")];
+
+    let x = Drcblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2 };
+    Ok(x)
+}
+
+// Decoder attention block
+pub struct Dablock {
+    pub g: TypedTensor<f32>, // [c]
+    pub t: TypedTensor<f32>, // [c]
+    pub w1: TypedTensor<f32>, // [d, c]
+    pub b1: TypedTensor<f32>, // [d]
+    pub w2: TypedTensor<f32>, // [c, C]
+    pub b2: TypedTensor<f32>, // [c]
+}
+
+pub fn get_dablock(
+    tensors: HashMap<String, TypedTensor<f32>>,
+    prefix: &str,
+) -> Result<Dablock, Box<dyn Error>> {
+    let mut backend = CpuBackend::new();
+
+    let g = tensors[&format!("{prefix}.norm.weight")];
+    let t = tensors[&format!("{prefix}.norm.bias")];
+
+    //     +---+
+    //     | Q |                T
+    //     +---+   +---+---+---+ 
+    // W = | K | = | Qᵀ| Kᵀ| Vᵀ|
+    //     +---+   +---+---+---+
+    //     | V |
+    //     +---+
+
+    let w1 = {
+        let mut colmaj = Vec::new();
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.q.weight")].host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.k.weight")].host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.v.weight")].host_data()?);
+
+
+    let x = Dablock { g, t, w1, b1, w2, b2 };
 }
