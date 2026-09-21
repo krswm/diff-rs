@@ -575,6 +575,42 @@ pub fn groupnorm(
     Ok(tensor)
 }
 
+pub fn conv11(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // "conv" -> 2D convolution
+    // "1" -> kernel size: 1x1 (padding: 0)
+    // "1" -> stride: 1
+    // The convoluted tensor has same x and y size as `tensor`.
+
+    // i: input channels
+    // o: output channels
+
+    // tensor [x, y, i, n]
+    // weight [1, 1, i, o]
+    // bias   [o]
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_i = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let num_o = weight.shape()[3];
+
+    // I can utilize kernel size being 1.
+    let weight = weight.reshape(&[num_i, num_o], backend)?; // [i, o]
+
+    let aa = [&weight, tensor].einsum("io,xyin->xyon", backend)?; // [x, y, o, n]
+
+    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [x, y, o, n]
+
+    let result = aa.add(&bias, backend)?; // [x, y, o, n]
+
+    Ok(result)
+}
+
 pub fn conv31(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
@@ -724,13 +760,12 @@ pub fn conv31(
     Ok(result)
 }
 
-
 pub fn conv32(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     backend: &mut CpuBackend,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // "conv" -> 2D convolution
     // "3" -> kernel size: 3x3 (padding: 1)
     // "2" -> stride: 2
@@ -790,9 +825,7 @@ pub fn conv32(
     let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x / 2, num_y / 2, num_o, num_n], colmaj)?; // [x', y', o, n]
     let result = result.add(&bias, backend)?; // [x', y', o, n]
 
-    cshow(&result)?;
-
-    Ok(())
+    Ok(result)
 }
 
 pub fn upsample(tensor: &TypedTensor<f32>) -> Result<TypedTensor<f32>, Box<dyn Error>> {

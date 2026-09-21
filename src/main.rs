@@ -131,15 +131,15 @@ pub mod loader;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let c32ref1 = loader::load_safetensors("../../Downloads/c32ref1.safetensors")?;
-    let c32ref2 = loader::load_safetensors("../../Downloads/c32ref2.safetensors")?;
+    let c11ref1 = loader::load_safetensors("../../Downloads/c11ref1.safetensors")?;
+    let c11ref2 = loader::load_safetensors("../../Downloads/c11ref2.safetensors")?;
     let mut backend = CpuBackend::new();
     // let mut rng = ChaCha20Rng::seed_from_u64(2269);
     // let x = util::randn(vec![512, 512, 320, 2], &mut rng)?;
     // let wc = util::randn(vec![3, 3, 320, 320], &mut rng)?;
     // let bc = util::randn(vec![320], &mut rng)?;
     let performance_timer = Instant::now();
-    util::conv32(&c32ref1["x"], &c32ref2["wc"], &c32ref2["bc"], &mut backend)?;
+    util::conv11(&c11ref1["x"], &c11ref2["wc"], &c11ref2["bc"], &mut backend)?;
     // util::conv31(&x, &wc, &bc, &mut backend)?;
     let performance_time = performance_timer.elapsed().as_secs_f64();
     println!("{performance_time} s");
