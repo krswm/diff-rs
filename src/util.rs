@@ -580,10 +580,11 @@ pub fn conv31(
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     backend: &mut CpuBackend,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // "conv" -> 2D convolution
     // "3" -> kernel size: 3x3 (padding: 1)
     // "1" -> stride: 1
+    // The convoluted tensor has same x and y size as `tensor`.
 
     /*
     show(&weight)?;
@@ -720,8 +721,77 @@ pub fn conv31(
     let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x, num_y, num_o, num_n], colmaj)?; // [x, y, o, n]
     let result = result.add(&bias, backend)?; // [x, y, o, n]
 
-    cshow(&result)?;
+    Ok(result)
+}
+
+
+pub fn conv32(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    backend: &mut CpuBackend,
+) -> Result<(), Box<dyn Error>> {
+    // "conv" -> 2D convolution
+    // "3" -> kernel size: 3x3 (padding: 1)
+    // "2" -> stride: 2
+    // The convoluted tensor has a half x and y size as `tensor` (thus the area shrinks by 1/4).
+
+    /*
+    show(&weight)?;
+    println!();
+    show(&bias)?;
+    println!();
+    show(&tensor)?;
+    println!();
+    */
+
+    // i: input channels
+    // o: output channels
+    // a: convolution weight, x-axis, 0 <= a < 3
+    // b: convolution weight, y-axis, 0 <= b < 3
+
+    // tensor [x, y, i, n]
+    // weight [a, b, i, o]
+    // bias   [o]
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_i = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let num_o = weight.shape()[3];
+
+    let aa = [weight, tensor].einsum("abio,xyin->abxyon", backend)?; // [a, b, x, y, o, n]
     
+    let num_p = num_o * num_n;
+    
+    let aa = aa.reshape(&[3, 3, num_x, num_y, num_p], backend)?; // [a, b, x, y, p]
+
+    let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
+    for p in 0..num_p {
+        for y in 0..(num_y / 2) {
+            for x in 0..(num_x / 2) {
+                let mut ans = 0.0f32;
+                for a in 0..3 {
+                    for b in 0..3 {
+                        let xx = 2 * x + a - 1;
+                        let yy = 2 * y + b - 1;
+                        if xx >= 0 && xx < num_x && yy >= 0 && yy < num_y {
+                            ans += *aa.get(&[a, b, xx, yy, p])?;
+                        }
+                    }
+                }
+                colmaj.push(ans);
+            }
+        }
+    }
+
+    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [x, y, o, n]
+
+    let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x / 2, num_y / 2, num_o, num_n], colmaj)?; // [x', y', o, n]
+    let result = result.add(&bias, backend)?; // [x', y', o, n]
+
+    cshow(&result)?;
+
     Ok(())
 }
 
