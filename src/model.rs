@@ -242,14 +242,14 @@ pub struct Dconv {
 }
 
 pub fn get_dconv(
-    tensors: HashMap<String, TypedTensor<f32>>,
+    tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Dconv, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
    
     let wc = tensors[&format!("{prefix}.weight")] // [o, i, y, x]
-        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
-    let bc = tensors[&format!("{prefix}.bias")]; // [o]
+        .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
+    let bc = tensors[&format!("{prefix}.bias")].duplicate()?; // [o]
 
     let x = Dconv { wc, bc };
     Ok(x)
@@ -268,21 +268,21 @@ pub struct Drblock {
 }
 
 pub fn get_drblock(
-    tensors: HashMap<String, TypedTensor<f32>>,
+    tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Drblock, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
-    let g1 = tensors[&format!("{prefix}.norm1.weight")];
-    let t1 = tensors[&format!("{prefix}.norm1.bias")];
+    let g1 = tensors[&format!("{prefix}.norm1.weight")].duplicate()?;
+    let t1 = tensors[&format!("{prefix}.norm1.bias")].duplicate()?;
     let wc1 = tensors[&format!("{prefix}.conv1.weight")] // [o, i, y, x]
-        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
-    let bc1 = tensors[&format!("{prefix}.conv1.bias")];
-    let g2 = tensors[&format!("{prefix}.norm2.weight"];
-    let t2 = tensors[&format!("{prefix}.norm2.bias"];
+        .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
+    let bc1 = tensors[&format!("{prefix}.conv1.bias")].duplicate()?;
+    let g2 = tensors[&format!("{prefix}.norm2.weight")].duplicate()?;
+    let t2 = tensors[&format!("{prefix}.norm2.bias")].duplicate()?;
     let wc2 = tensors[&format!("{prefix}.conv2.weight")] // [o, i, y, x]
-        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
-    let bc2 = tensors[&format!("{prefix}.conv2.bias")];
+        .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
+    let bc2 = tensors[&format!("{prefix}.conv2.bias")].duplicate()?;
 
     let x = Drblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2 };
     Ok(x)
@@ -303,26 +303,26 @@ pub struct Drcblock {
 }
 
 pub fn get_drcblock(
-    tensors: HashMap<String, TypedTensor<f32>>,
+    tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Drcblock, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
-    let g1 = tensors[&format!("{prefix}.norm1.weight")];
-    let t1 = tensors[&format!("{prefix}.norm1.bias")];
+    let g1 = tensors[&format!("{prefix}.norm1.weight")].duplicate()?;
+    let t1 = tensors[&format!("{prefix}.norm1.bias")].duplicate()?;
     let wc1 = tensors[&format!("{prefix}.conv1.weight")] // [o, i, y, x]
-        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
-    let bc1 = tensors[&format!("{prefix}.conv1.bias")];
-    let g2 = tensors[&format!("{prefix}.norm2.weight"];
-    let t2 = tensors[&format!("{prefix}.norm2.bias"];
+        .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
+    let bc1 = tensors[&format!("{prefix}.conv1.bias")].duplicate()?;
+    let g2 = tensors[&format!("{prefix}.norm2.weight")].duplicate()?;
+    let t2 = tensors[&format!("{prefix}.norm2.bias")].duplicate()?;
     let wc2 = tensors[&format!("{prefix}.conv2.weight")] // [o, i, y, x]
-        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
-    let bc2 = tensors[&format!("{prefix}.conv2.bias")];
+        .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
+    let bc2 = tensors[&format!("{prefix}.conv2.bias")].duplicate()?;
     let wc3 = tensors[&format!("{prefix}.nin_shortcut.weight")] // [o, i, y, x]
-        .transpose(&[3, 2, 1, 0], backend); // [x, y, i, o]
-    let bc3 = tensors[&format!("{prefix}.nin_shortcut.bias")];
+        .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
+    let bc3 = tensors[&format!("{prefix}.nin_shortcut.bias")].duplicate()?;
 
-    let x = Drcblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2 };
+    let x = Drcblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2, wc3, bc3 };
     Ok(x)
 }
 
@@ -337,13 +337,13 @@ pub struct Dablock {
 }
 
 pub fn get_dablock(
-    tensors: HashMap<String, TypedTensor<f32>>,
+    tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Dablock, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
-    let g = tensors[&format!("{prefix}.norm.weight")];
-    let t = tensors[&format!("{prefix}.norm.bias")];
+    let g = tensors[&format!("{prefix}.norm.weight")].duplicate()?;
+    let t = tensors[&format!("{prefix}.norm.bias")].duplicate()?;
 
     //     +---+
     //     | Q |                T
@@ -355,10 +355,57 @@ pub fn get_dablock(
 
     let w1 = {
         let mut colmaj = Vec::new();
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.q.weight")].host_data()?);
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.k.weight")].host_data()?);
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.v.weight")].host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.q.weight")].transpose(&[3, 2, 1, 0], &mut backend)?.host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.k.weight")].transpose(&[3, 2, 1, 0], &mut backend)?.host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.v.weight")].transpose(&[3, 2, 1, 0], &mut backend)?.host_data()?);
 
+        let a = tensors[&format!("{prefix}.q.weight")].shape()[0];
+
+        TypedTensor::<f32>::from_vec_col_major(vec![a, a * 3], colmaj)?.transpose(&[1, 0], &mut backend)?
+    };
+
+    let b1 = {
+        let mut colmaj = Vec::new();
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.q.bias")].host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.k.bias")].host_data()?);
+        colmaj.extend_from_slice(tensors[&format!("{prefix}.v.bias")].host_data()?);
+
+        let a = tensors[&format!("{prefix}.q.bias")].shape()[0];
+
+        TypedTensor::<f32>::from_vec_col_major(vec![a * 3], colmaj)?
+    };
+
+    let num_c = tensors[&format!("{prefix}.proj_out.weight")].shape()[0];
+
+    let w2 = tensors[&format!("{prefix}.proj_out.weight")] // [C, c, 1, 1]
+        .transpose(&[3, 2, 1, 0], &mut backend)? // [c, C, 1, 1]
+        .reshape(&[num_c, num_c, 1, 1], &mut backend)?;
+
+    let b2 = tensors[&format!("{prefix}.proj_out.bias")].duplicate()?;
 
     let x = Dablock { g, t, w1, b1, w2, b2 };
+    Ok(x)
+}
+
+// Decoder model
+pub struct Dmodel {
+    pub dconv_pq: Dconv,
+    pub drblock_mid1: Drblock,
+    pub dablock: Dablock,
+    pub drcblock_10: Drcblock,
+}
+
+pub fn get_dmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Dmodel, Box<dyn Error>> {
+    let dconv_pq = get_dconv(&tensors, "first_stage_model.post_quant_conv")?;
+    let drblock_mid1 = get_drblock(&tensors, "first_stage_model.decoder.mid.block_1")?;
+    let dablock = get_dablock(&tensors, "first_stage_model.decoder.mid.attn_1")?;
+    let drcblock_10 = get_drcblock(&tensors, "first_stage_model.decoder.up.1.block.0")?;
+
+    let x = Dmodel {
+        dconv_pq,
+        drblock_mid1,
+        dablock,
+        drcblock_10,
+    };
+    Ok(x)
 }
