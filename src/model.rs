@@ -390,22 +390,97 @@ pub fn get_dablock(
 // Decoder model
 pub struct Dmodel {
     pub dconv_pq: Dconv,
+    pub dconv_in: Dconv,
+
     pub drblock_mid1: Drblock,
     pub dablock: Dablock,
+    pub drblock_mid2: Drblock,
+
+    pub drblock_30: Drblock,
+    pub drblock_31: Drblock,
+    pub drblock_32: Drblock,
+    pub dconv_3: Dconv,
+
+    pub drblock_20: Drblock,
+    pub drblock_21: Drblock,
+    pub drblock_22: Drblock,
+    pub dconv_2: Dconv,
+
     pub drcblock_10: Drcblock,
+    pub drblock_11: Drblock,
+    pub drblock_12: Drblock,
+    pub dconv_1: Dconv,
+
+    pub drcblock_00: Drcblock,
+    pub drblock_01: Drblock,
+    pub drblock_02: Drblock,
+
+    pub g: TypedTensor<f32>, // [c]
+    pub t: TypedTensor<f32>, // [c]
+    pub dconv_out: Dconv,
 }
 
 pub fn get_dmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Dmodel, Box<dyn Error>> {
     let dconv_pq = get_dconv(&tensors, "first_stage_model.post_quant_conv")?;
+    let dconv_in = get_dconv(&tensors, "first_stage_model.decoder.conv_in")?;
+
     let drblock_mid1 = get_drblock(&tensors, "first_stage_model.decoder.mid.block_1")?;
     let dablock = get_dablock(&tensors, "first_stage_model.decoder.mid.attn_1")?;
+    let drblock_mid2 = get_drblock(&tensors, "first_stage_model.decoder.mid.block_2")?;
+
+    let drblock_30 = get_drblock(&tensors, "first_stage_model.decoder.up.3.block.0")?;
+    let drblock_31 = get_drblock(&tensors, "first_stage_model.decoder.up.3.block.1")?;
+    let drblock_32 = get_drblock(&tensors, "first_stage_model.decoder.up.3.block.2")?;
+    let dconv_3 = get_dconv(&tensors, "first_stage_model.decoder.up.3.upsample.conv")?;
+
+    let drblock_20 = get_drblock(&tensors, "first_stage_model.decoder.up.2.block.0")?;
+    let drblock_21 = get_drblock(&tensors, "first_stage_model.decoder.up.2.block.1")?;
+    let drblock_22 = get_drblock(&tensors, "first_stage_model.decoder.up.2.block.2")?;
+    let dconv_2 = get_dconv(&tensors, "first_stage_model.decoder.up.2.upsample.conv")?;
+
     let drcblock_10 = get_drcblock(&tensors, "first_stage_model.decoder.up.1.block.0")?;
+    let drblock_11 = get_drblock(&tensors, "first_stage_model.decoder.up.1.block.1")?;
+    let drblock_12 = get_drblock(&tensors, "first_stage_model.decoder.up.1.block.2")?;
+    let dconv_1 = get_dconv(&tensors, "first_stage_model.decoder.up.1.upsample.conv")?;
+
+    let drcblock_00 = get_drcblock(&tensors, "first_stage_model.decoder.up.0.block.0")?;
+    let drblock_01 = get_drblock(&tensors, "first_stage_model.decoder.up.0.block.1")?;
+    let drblock_02 = get_drblock(&tensors, "first_stage_model.decoder.up.0.block.2")?;
+
+    let g = tensors["first_stage_model.decoder.norm_out.weight"].duplicate()?;
+    let t = tensors["first_stage_model.decoder.norm_out.bias"].duplicate()?;
+    let dconv_out = get_dconv(&tensors, "first_stage_model.decoder.conv_out")?;
 
     let x = Dmodel {
         dconv_pq,
+        dconv_in,
+
         drblock_mid1,
         dablock,
+        drblock_mid2,
+
+        drblock_30,
+        drblock_31,
+        drblock_32,
+        dconv_3,
+
+        drblock_20,
+        drblock_21,
+        drblock_22,
+        dconv_2,
+
         drcblock_10,
+        drblock_11,
+        drblock_12,
+        dconv_1,
+
+        drcblock_00,
+        drblock_01,
+        drblock_02,
+
+        g,
+        t,
+        dconv_out,
     };
     Ok(x)
 }
