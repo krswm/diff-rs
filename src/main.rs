@@ -127,12 +127,15 @@ use rand::rngs::ChaCha20Rng;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::TypedTensor;
 
+pub mod decoder;
 pub mod loader;
 pub mod model;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
+
+    let tensors = loader::load_safetensors("../../Downloads/dref1.safetensors")?;
 
     let dmodel = {
         let tensors = {
@@ -141,6 +144,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         model::get_dmodel(tensors)?
     };
+
+    decoder::decode(&tensors["x"], dmodel)?;
     
     Ok(())
 }
