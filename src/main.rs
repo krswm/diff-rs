@@ -130,9 +130,11 @@ use tenferro_runtime::TypedTensor;
 pub mod decoder;
 pub mod loader;
 pub mod model;
+pub mod saver;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    /*
     let args: Vec<String> = std::env::args().collect();
 
     let tensors = loader::load_safetensors("../../Downloads/dref1.safetensors")?;
@@ -148,6 +150,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tensor = decoder::decode(&tensors["x"], dmodel)?;
 
     util::show(&tensor)?;
+    */
+
+    let args: Vec<String> = std::env::args().collect();
+
+    let ref_ = loader::load_safetensors("../../Downloads/decref.safetensors")?;
+    let tensor = saver::save_as_netppm_image(&ref_["i"], &args[1]);
     
     Ok(())
 }
