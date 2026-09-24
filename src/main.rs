@@ -145,7 +145,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         model::get_dmodel(tensors)?
     };
 
-    decoder::decode(&tensors["x"], dmodel)?;
+    let tensor = decoder::decode(&tensors["x"], dmodel)?;
+
+    util::show(&tensor)?;
     
     Ok(())
 }
