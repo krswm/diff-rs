@@ -378,8 +378,8 @@ pub fn get_dablock(
     let num_c = tensors[&format!("{prefix}.proj_out.weight")].shape()[0];
 
     let w2 = tensors[&format!("{prefix}.proj_out.weight")] // [C, c, 1, 1]
-        .transpose(&[3, 2, 1, 0], &mut backend)? // [c, C, 1, 1]
-        .reshape(&[num_c, num_c, 1, 1], &mut backend)?;
+        // .transpose(&[3, 2, 1, 0], &mut backend)? // [c, C, 1, 1]
+        .reshape(&[num_c, num_c], &mut backend)?; // [c, C]
 
     let b2 = tensors[&format!("{prefix}.proj_out.bias")].duplicate()?;
 

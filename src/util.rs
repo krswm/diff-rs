@@ -861,6 +861,7 @@ pub fn upsample(tensor: &TypedTensor<f32>) -> Result<TypedTensor<f32>, Box<dyn E
 pub fn self_attention(
     tensor: &TypedTensor<f32>,
     in_weight: &TypedTensor<f32>,
+    in_bias: &TypedTensor<f32>,
     out_weight: &TypedTensor<f32>,
     out_bias: &TypedTensor<f32>,
     num_h: usize, // Number of heads
@@ -883,7 +884,10 @@ pub fn self_attention(
     let num_n = tensor.shape()[3];
     let num_i = num_c / num_h;
 
-    let tensor = [in_weight, tensor].einsum("dc,xycn->xynd", backend)?; // [x, y, n, d]
+    let in_bias = in_bias.reshape(&[1, 1, 1, 3 * num_c], backend)?; // [1, 1, 1, d]
+
+    let tensor = [in_weight, tensor].einsum("dc,xycn->xynd", backend)? // [x, y, n, d]
+        .add(&in_bias, backend)?; // [x, y, n, d]
 
     // TODO: Maybe I have to consider using views or slices. tenferro supports them.
     let mut chunks = tensor.host_data()?.chunks(num_x * num_y * num_n * num_c);
@@ -920,9 +924,6 @@ pub fn self_attention(
     let tensor = [&out_weight, &tensor]
         .einsum("cC,xyCn->xycn", backend)? // [x, y, c, n]
         .add(&out_bias, backend)?; // [x, y, c, n]
-
-    show(&tensor)?;
-    // It's fun to use `einsum`!
 
     Ok(tensor)
 }

@@ -7,45 +7,28 @@ use std::error::Error;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-use crate::model::{Dmodel, Drblock};
-use crate::util::{conv11, conv31, groupnorm, silu, show};
+use crate::model::{Dablock, Dmodel, Drblock};
+use crate::util::{conv11, conv31, groupnorm, self_attention, silu, show};
 
 pub fn calc_drblock(tensor: &TypedTensor<f32>, drblock: &Drblock, backend: &mut CpuBackend) -> Result<TypedTensor<f32>, Box<dyn Error>> {
-    show(&tensor)?;
-    println!();
-
     let tmp = groupnorm(tensor, &drblock.g1, &drblock.t1, 32, backend)?;
-    show(&tmp)?;
-    println!();
-
     let tmp = silu(&tmp, backend)?;
-    show(&tmp)?;
-    println!();
-
     let tmp = conv31(&tmp, &drblock.wc1, &drblock.bc1, backend)?;
-    show(&tmp)?;
-    println!();
-
     let tmp = groupnorm(&tmp, &drblock.g2, &drblock.t2, 32, backend)?;
-    show(&tmp)?;
-    println!();
-
     let tmp = silu(&tmp, backend)?;
-    show(&tmp)?;
-    println!();
-
     let tmp = conv31(&tmp, &drblock.wc2, &drblock.bc2, backend)?;
-    show(&tmp)?;
-    println!();
-
     let tensor = tensor.add(&tmp, backend)?;
-    show(&tensor)?;
-    println!();
-    
     Ok(tensor)
+}
 
-    // Coding util.rs first was a correct decision!
-    // It's easier to build calculation blocks now.
+pub fn calc_dablock(tensor: &TypedTensor<f32>, dablock: &Dablock, backend: &mut CpuBackend) -> Result<(), Box<dyn Error>> {
+    let tmp = groupnorm(tensor, &dablock.g, &dablock.t, 32, backend)?;
+    let tmp = self_attention(&tmp, &dablock.w1, &dablock.b1, &dablock.w2, &dablock.b2, 1, backend)?;
+    let tensor = tensor.add(&tmp, backend)?;
+
+    show(&tensor)?;
+    
+    Ok(())
 }
 
 pub fn decode(tensor: &TypedTensor<f32>, dmodel: Dmodel) -> Result<(), Box<dyn Error>> {
@@ -57,6 +40,7 @@ pub fn decode(tensor: &TypedTensor<f32>, dmodel: Dmodel) -> Result<(), Box<dyn E
     let tensor = conv11(&tensor, &dmodel.dconv_pq.wc, &dmodel.dconv_pq.bc, &mut backend)?;
     let tensor = conv31(&tensor, &dmodel.dconv_in.wc, &dmodel.dconv_in.bc, &mut backend)?;
     let tensor = calc_drblock(&tensor, &dmodel.drblock_mid1, &mut backend)?;
+    let tensor = calc_dablock(&tensor, &dmodel.dablock, &mut backend)?;
 
     Ok(())
 }
