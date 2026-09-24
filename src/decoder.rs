@@ -7,7 +7,7 @@ use std::error::Error;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-use crate::model::{Dablock, Dmodel, Drblock};
+use crate::model::{Dablock, Dmodel, Drblock, Drcblock};
 use crate::util::{conv11, conv31, groupnorm, self_attention, silu, show, upsample};
 
 pub fn calc_drblock(tensor: &TypedTensor<f32>, drblock: &Drblock, backend: &mut CpuBackend) -> Result<TypedTensor<f32>, Box<dyn Error>> {
@@ -17,6 +17,18 @@ pub fn calc_drblock(tensor: &TypedTensor<f32>, drblock: &Drblock, backend: &mut 
     let tmp = groupnorm(&tmp, &drblock.g2, &drblock.t2, 32, backend)?;
     let tmp = silu(&tmp, backend)?;
     let tmp = conv31(&tmp, &drblock.wc2, &drblock.bc2, backend)?;
+    let tensor = tensor.add(&tmp, backend)?;
+    Ok(tensor)
+}
+
+pub fn calc_drcblock(tensor: &TypedTensor<f32>, drcblock: &Drcblock, backend: &mut CpuBackend) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    let tmp = groupnorm(tensor, &drcblock.g1, &drcblock.t1, 32, backend)?;
+    let tmp = silu(&tmp, backend)?;
+    let tmp = conv31(&tmp, &drcblock.wc1, &drcblock.bc1, backend)?;
+    let tmp = groupnorm(&tmp, &drcblock.g2, &drcblock.t2, 32, backend)?;
+    let tmp = silu(&tmp, backend)?;
+    let tmp = conv31(&tmp, &drcblock.wc2, &drcblock.bc2, backend)?;
+    let tensor = conv11(&tensor, &drcblock.wc3, &drcblock.bc3, backend)?;
     let tensor = tensor.add(&tmp, backend)?;
     Ok(tensor)
 }
@@ -44,6 +56,12 @@ pub fn decode(tensor: &TypedTensor<f32>, dmodel: Dmodel) -> Result<(), Box<dyn E
     let tensor = calc_drblock(&tensor, &dmodel.drblock_32, &mut backend)?;
     let tensor = upsample(&tensor)?;
     let tensor = conv31(&tensor, &dmodel.dconv_3.wc, &dmodel.dconv_3.bc, &mut backend)?;
+    let tensor = calc_drblock(&tensor, &dmodel.drblock_20, &mut backend)?;
+    let tensor = calc_drblock(&tensor, &dmodel.drblock_21, &mut backend)?;
+    let tensor = calc_drblock(&tensor, &dmodel.drblock_22, &mut backend)?;
+    let tensor = upsample(&tensor)?;
+    let tensor = conv31(&tensor, &dmodel.dconv_2.wc, &dmodel.dconv_2.bc, &mut backend)?;
+    let tensor = calc_drcblock(&tensor, &dmodel.drcblock_10, &mut backend)?;
 
     show(&tensor)?;
 
