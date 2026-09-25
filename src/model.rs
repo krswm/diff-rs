@@ -484,3 +484,12 @@ pub fn get_dmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Dmodel, 
     };
     Ok(x)
 }
+
+// diffusion model
+pub struct Fmodel {
+}
+
+pub fn get_fmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Fmodel, Box<dyn Error>> {
+    let x = Fmodel {};
+    Ok(x)
+}

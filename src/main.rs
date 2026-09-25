@@ -131,9 +131,21 @@ pub mod decoder;
 pub mod loader;
 pub mod model;
 pub mod saver;
+pub mod unet;
 pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let ref_ = loader::load_safetensors("../../Downloads/fref.safetensors")?;
+    let args: Vec<String> = std::env::args().collect();
+    let fmodel = {
+        let tensors = {
+            let path = &format!("{}/model.safetensors", &args[1]);
+            loader::load_safetensors(path)?
+        };
+        model::get_fmodel(tensors)?
+    };
+    unet::forward(&ref_["x"], &ref_["c"], 900, 800, &fmodel)?;
+
     /*
     let args: Vec<String> = std::env::args().collect();
 
@@ -152,10 +164,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     util::show(&tensor)?;
     */
 
+    /*
     let args: Vec<String> = std::env::args().collect();
 
     let ref_ = loader::load_safetensors("../../Downloads/decref.safetensors")?;
     let tensor = saver::save_as_netppm_image(&ref_["i"], &args[1]);
+    */
     
     Ok(())
 }
