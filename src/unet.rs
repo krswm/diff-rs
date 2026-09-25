@@ -32,6 +32,10 @@ pub fn forward(
     // Tensor, EagerTensor, and TracedTensor have `stack`... I may have to use them instead...
     let timef = TypedTensor::<f32>::from_vec_col_major(vec![320], colmaj)?;
 
+    let tensor = tensor.broadcast_in_dim(&[64, 64, 4, 2], &[0, 1, 2, 3], &mut backend)?;
+
+    show(&tensor)?;
+
     show(&timef)?;
     
     Ok(())
