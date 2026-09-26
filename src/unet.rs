@@ -1,12 +1,13 @@
 // My U-net implementation with tenferro!
 
 use std::error::Error;
+use std::io::{Write, stdout};
 
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 use crate::model::Fmodel;
-use crate::util::{show, silu};
+use crate::util::{conv31, show, silu};
 
 pub fn forward(
     tensor: &TypedTensor<f32>,
@@ -16,7 +17,9 @@ pub fn forward(
     fmodel: &Fmodel,
 ) -> Result<(), Box<dyn Error>> {
     let mut backend = CpuBackend::new();
-    
+
+    println!("--- t = {curr_time} (t_prev = {prev_time}) ----");
+
     let myriad = TypedTensor::<f32>::from_vec_col_major(vec![], vec![10000.0])?;
     let a_hundred_and_sixty = TypedTensor::<f32>::from_vec_col_major(vec![], vec![160.0])?;
     let curr_time_as_tensor = TypedTensor::<f32>::from_vec_col_major(vec![], vec![curr_time as f32])?;
@@ -34,21 +37,18 @@ pub fn forward(
 
     let tensor = tensor.broadcast_in_dim(&[64, 64, 4, 2], &[0, 1, 2, 3], &mut backend)?;
 
-    show(&timef)?;
-    println!();
     let timef = timef.reshape(&[320, 1], &mut backend)?;
     let time_b1 = fmodel.time_b1.reshape(&[1280, 1], &mut backend)?;
     let timef = fmodel.time_w1.matmul(&timef, &mut backend)?.add(&time_b1, &mut backend)?;
-    show(&timef)?;
-    println!();
     let timef = silu(&timef, &mut backend)?;
-    show(&timef)?;
-    println!();
     let timef = timef.reshape(&[1280, 1], &mut backend)?;
     let time_b2 = fmodel.time_b2.reshape(&[1280, 1], &mut backend)?;
     let timef = fmodel.time_w2.matmul(&timef, &mut backend)?.add(&time_b2, &mut backend)?;
-    show(&timef)?;
-    println!();
-    
+
+    show(&tensor)?;
+    print!("\rfconv_i0\x1b[K"); stdout().flush(); let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
+    println!("\r\x1b[K"); stdout().flush();
+    show(&tensor)?;
+
     Ok(())
 }
