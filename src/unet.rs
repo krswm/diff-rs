@@ -6,8 +6,8 @@ use std::io::{Write, stdout};
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-use crate::model::{Fmodel, Frblock, Frcblock};
-use crate::util::{conv11, conv31, groupnorm, show, silu};
+use crate::model::{Fablock, Fmodel, Frblock, Frcblock};
+use crate::util::{conv11, conv31, cross_attention, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu};
 
 fn calc_frblock(
     tensor: &TypedTensor<f32>,
@@ -68,6 +68,73 @@ fn calc_frcblock(
     Ok(tensor)
 }
 
+fn calc_fablock(
+    tensor: &TypedTensor<f32>,
+    context: &TypedTensor<f32>,
+    fablock: &Fablock,
+    backend: &mut CpuBackend,
+) -> Result<(), Box<dyn Error>> {
+    println!("\x1b[91m");
+    show(&tensor)?;
+
+    let tmp = groupnorm_micro(tensor, &fablock.g1, &fablock.t1, 32, backend)?;
+    // TODO: I just noticed the reference implementation has eps=1e-6 here, not usual 1e-5.
+    // I totally missed that in my Julia version.
+    // This may be the true cause of the slight calculation error in my Julia version!
+    // I believe it won't affect the result image drastically, though.
+
+    println!("\x1b[92m");
+    show(&tmp)?;
+
+    let tmp = conv11(&tmp, &fablock.wc1, &fablock.bc1, backend)?;
+
+    println!("\x1b[93m");
+    show(&tmp)?;
+
+    let tmp2 = layernorm(&tmp, &fablock.g2, &fablock.t2, backend)?;
+
+    println!("\x1b[94m");
+    show(&tmp2)?;
+
+    let num_c1 = fablock.w21.shape()[0];
+    let zero_vector = TypedTensor::<f32>::from_vec_col_major(vec![], vec![0.0])?;
+    let zero_vector = zero_vector.broadcast_in_dim(&[num_c1], &[], backend)?;
+    let tmp2 = self_attention(&tmp2, &fablock.w21, &zero_vector, &fablock.w22, &fablock.b22, 8, backend)?;
+
+    println!("\x1b[95m");
+    show(&tmp2)?;
+
+    let tmp = tmp.add(&tmp2, backend)?;
+
+    println!("\x1b[96m");
+    show(&tensor)?;
+
+    let tmp2 = layernorm(&tmp, &fablock.g3, &fablock.t3, backend)?;
+
+    println!("\x1b[31m");
+    show(&tmp2)?;
+
+    let tmp2 = cross_attention(&tmp2, &context, &fablock.w31q, &fablock.w31k, &fablock.w31v, &fablock.w32, &fablock.b32, 8, backend)?;
+
+    println!("\x1b[32m");
+    show(&tmp2)?;
+
+    let tmp = tmp.add(&tmp2, backend)?;
+
+    println!("\x1b[33m");
+    show(&tmp2)?;
+
+    let tmp2 = layernorm(&tmp, &fablock.g4, &fablock.t4, backend)?; // [x, y, c, n]
+
+    println!("\x1b[34m");
+    show(&tmp2)?;
+
+    println!("\x1b[35m");
+    show(&tmp2)?;
+
+    Ok(())
+}
+
 pub fn forward(
     tensor: &TypedTensor<f32>,
     context: &TypedTensor<f32>,
@@ -105,9 +172,8 @@ pub fn forward(
     let timef = fmodel.time_w2.matmul(&timef, &mut backend)?.add(&time_b2, &mut backend)?;
 
     print!("\rfconv_i0\x1b[K");   stdout().flush(); let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
-    show(&tensor)?;
     print!("\rfrblock_i1\x1b[K"); stdout().flush(); let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i1, &mut backend)?;
-    show(&tensor)?;
+    print!("\rfablock_i1\x1b[K"); stdout().flush(); let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i1, &mut backend)?;
     println!("\r\x1b[K"); stdout().flush();
 
     Ok(())

@@ -520,12 +520,13 @@ pub fn layernorm(
     Ok(tensor)
 }
 
-pub fn groupnorm(
+pub fn groupnorm_general(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     num_g: usize, // Number of groups
     backend: &mut CpuBackend,
+    epsilon: f32,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [x, y, c, n]
     // weight [c]
@@ -539,7 +540,7 @@ pub fn groupnorm(
     let count =
         TypedTensor::<f32>::from_vec_col_major(vec![], vec![(num_x * num_y * num_i) as f32])?;
     // Notice this differs from layernorm!
-    let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![0.00001f32])?;
+    let epsilon = TypedTensor::<f32>::from_vec_col_major(vec![], vec![epsilon])?;
     let tensor = tensor.reshape(&[num_x, num_y, num_i, num_g, num_n], backend)?; // [x, y, i, g, n]
     let weight = weight.reshape(&[1, 1, num_i, num_g, 1], backend)?; // [1, 1, i, g, 1]
     let bias = bias.reshape(&[1, 1, num_i, num_g, 1], backend)?; // [1, 1, i, g, 1]
@@ -573,6 +574,42 @@ pub fn groupnorm(
         .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [x, y, c, n]
 
     Ok(tensor)
+}
+
+pub fn groupnorm(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    num_g: usize, // Number of groups
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    let x = groupnorm_general(
+        tensor,
+        weight,
+        bias,
+        num_g,
+        backend,
+        1.0e-5,
+    )?;
+    Ok(x)
+}
+
+pub fn groupnorm_micro(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    num_g: usize, // Number of groups
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    let x = groupnorm_general(
+        tensor,
+        weight,
+        bias,
+        num_g,
+        backend,
+        1.0e-6, // <- the only difference from above
+    )?;
+    Ok(x)
 }
 
 pub fn conv11(

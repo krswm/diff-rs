@@ -580,7 +580,7 @@ pub fn get_frcblock(
 }
 
 // Diffusion attention block
-struct Fablock {
+pub struct Fablock {
     pub g1: TypedTensor<f32>,
     pub t1: TypedTensor<f32>,
     pub wc1: TypedTensor<f32>,
@@ -636,15 +636,15 @@ pub fn get_fablock(
     };
 
     // No bias (b21). Use zero vector.
-    let w22  = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.weight")].transpose(&[1, 0], &mut backend)?;
+    let w22  = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.weight")].duplicate()?;
     let b22  = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.bias")].duplicate()?;
 
     let g3   = tensors[&format!("{prefix}.transformer_blocks.0.norm2.weight")].duplicate()?;
     let t3   = tensors[&format!("{prefix}.transformer_blocks.0.norm2.bias")].duplicate()?;
-    let w31q = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_q.weight")].transpose(&[1, 0], &mut backend)?; // TODO: They may not 2D tensors
-    let w31k = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_k.weight")].transpose(&[1, 0], &mut backend)?; //
-    let w31v = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_v.weight")].transpose(&[1, 0], &mut backend)?; //
-    let w32  = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.weight" )].transpose(&[1, 0], &mut backend)?;
+    let w31q = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_q.weight")].duplicate()?;
+    let w31k = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_k.weight")].duplicate()?;
+    let w31v = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_v.weight")].duplicate()?;
+    let w32  = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.weight" )].duplicate()?;
     let b32  = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.bias" )].duplicate()?;
 
     let g4   = tensors[&format!("{prefix}.transformer_blocks.0.norm3.weight")].duplicate()?;
