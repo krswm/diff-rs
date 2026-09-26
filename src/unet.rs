@@ -6,8 +6,67 @@ use std::io::{Write, stdout};
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-use crate::model::Fmodel;
-use crate::util::{conv31, show, silu};
+use crate::model::{Fmodel, Frblock, Frcblock};
+use crate::util::{conv11, conv31, groupnorm, show, silu};
+
+fn calc_frblock(
+    tensor: &TypedTensor<f32>,
+    timef: &TypedTensor<f32>,
+    frblock: &Frblock,
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // tensor [x, y, c, n]
+
+    let num_c = tensor.shape()[2];
+
+    let tmp = groupnorm(tensor, &frblock.g1, &frblock.t1, 32, backend)?;
+    let tmp = silu(&tmp, backend)?;
+    let tmp = conv31(&tmp, &frblock.wc1, &frblock.bc1, backend)?;
+
+    let timef = silu(&timef, backend)?;
+    let timef = timef.reshape(&[1280, 1], backend)?;
+    let b = frblock.b.reshape(&[num_c, 1], backend)?;
+    let timef = frblock.w.matmul(&timef, backend)?.add(&b, backend)?;
+
+    let tmp = tmp.add(&timef, backend)?;
+    let tmp = groupnorm(&tmp, &frblock.g2, &frblock.t2, 32, backend)?;
+    let tmp = silu(&tmp, backend)?;
+    let tmp = conv31(&tmp, &frblock.wc2, &frblock.bc2, backend)?;
+
+    let tensor = tensor.add(&tmp, backend)?;
+
+    Ok(tensor)
+}
+
+fn calc_frcblock(
+    tensor: &TypedTensor<f32>,
+    timef: &TypedTensor<f32>,
+    frcblock: &Frcblock,
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    // tensor [x, y, c, n]
+
+    let num_c = tensor.shape()[2];
+
+    let tmp = groupnorm(tensor, &frcblock.g1, &frcblock.t1, 32, backend)?;
+    let tmp = silu(&tmp, backend)?;
+    let tmp = conv31(&tmp, &frcblock.wc1, &frcblock.bc1, backend)?;
+
+    let timef = silu(&timef, backend)?;
+    let timef = timef.reshape(&[1280, 1], backend)?;
+    let b = frcblock.b.reshape(&[num_c, 1], backend)?;
+    let timef = frcblock.w.matmul(&timef, backend)?.add(&b, backend)?;
+
+    let tmp = tmp.add(&timef, backend)?;
+    let tmp = groupnorm(&tmp, &frcblock.g2, &frcblock.t2, 32, backend)?;
+    let tmp = silu(&tmp, backend)?;
+    let tmp = conv31(&tmp, &frcblock.wc2, &frcblock.bc2, backend)?;
+
+    let tensor = conv11(&tensor, &frcblock.wc3, &frcblock.bc3, backend)?;
+    let tensor = tensor.add(&tmp, backend)?;
+
+    Ok(tensor)
+}
 
 pub fn forward(
     tensor: &TypedTensor<f32>,
@@ -45,10 +104,11 @@ pub fn forward(
     let time_b2 = fmodel.time_b2.reshape(&[1280, 1], &mut backend)?;
     let timef = fmodel.time_w2.matmul(&timef, &mut backend)?.add(&time_b2, &mut backend)?;
 
+    print!("\rfconv_i0\x1b[K");   stdout().flush(); let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
     show(&tensor)?;
-    print!("\rfconv_i0\x1b[K"); stdout().flush(); let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
+    print!("\rfrblock_i1\x1b[K"); stdout().flush(); let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i1, &mut backend)?;
+    show(&tensor)?;
     println!("\r\x1b[K"); stdout().flush();
-    show(&tensor)?;
 
     Ok(())
 }
