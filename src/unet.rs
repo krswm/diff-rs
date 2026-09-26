@@ -6,7 +6,7 @@ use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 use crate::model::Fmodel;
-use crate::util::show;
+use crate::util::{show, silu};
 
 pub fn forward(
     tensor: &TypedTensor<f32>,
@@ -34,9 +34,21 @@ pub fn forward(
 
     let tensor = tensor.broadcast_in_dim(&[64, 64, 4, 2], &[0, 1, 2, 3], &mut backend)?;
 
-    show(&tensor)?;
-
     show(&timef)?;
+    println!();
+    let timef = timef.reshape(&[320, 1], &mut backend)?;
+    let time_b1 = fmodel.time_b1.reshape(&[1280, 1], &mut backend)?;
+    let timef = fmodel.time_w1.matmul(&timef, &mut backend)?.add(&time_b1, &mut backend)?;
+    show(&timef)?;
+    println!();
+    let timef = silu(&timef, &mut backend)?;
+    show(&timef)?;
+    println!();
+    let timef = timef.reshape(&[1280, 1], &mut backend)?;
+    let time_b2 = fmodel.time_b2.reshape(&[1280, 1], &mut backend)?;
+    let timef = fmodel.time_w2.matmul(&timef, &mut backend)?.add(&time_b2, &mut backend)?;
+    show(&timef)?;
+    println!();
     
     Ok(())
 }

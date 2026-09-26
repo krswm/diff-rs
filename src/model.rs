@@ -730,9 +730,9 @@ pub struct Fmodel {
 pub fn get_fmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Fmodel, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
-    let time_w1 = tensors["model.diffusion_model.time_embed.0.weight"].transpose(&[1, 0], &mut backend)?;
+    let time_w1 = tensors["model.diffusion_model.time_embed.0.weight"].duplicate()?;
     let time_b1 = tensors["model.diffusion_model.time_embed.0.bias"].duplicate()?;
-    let time_w2 = tensors["model.diffusion_model.time_embed.2.weight"].transpose(&[1, 0], &mut backend)?;
+    let time_w2 = tensors["model.diffusion_model.time_embed.2.weight"].duplicate()?;
     let time_b2 = tensors["model.diffusion_model.time_embed.2.bias"].duplicate()?;
 
     let fconv_i0 = get_fconv(&tensors, "model.diffusion_model.input_blocks.0.0")?;
