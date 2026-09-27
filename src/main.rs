@@ -14,20 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/*
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
+use rand::SeedableRng;
+use rand::rngs::ChaCha20Rng;
 use serde_json::Value;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::TypedTensor;
 
+pub mod decoder;
 pub mod loader;
 pub mod model;
+pub mod saver;
 pub mod tokenizer;
 pub mod transformer;
+pub mod unet;
+pub mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
@@ -40,6 +46,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("You may have to enclose 'your prompt' with quotes.");
         return Ok(());
     }
+
+    println!("==== CLIP: Obtaining Context Tensor from Your Prompt... ====");
 
     let token_to_id: HashMap<String, usize> = {
         let path = &format!("{}/vocab.json", &args[1]);
@@ -113,30 +121,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         TypedTensor::<f32>::from_vec_col_major(vec![model.n_embd, model.n_ctx], colmaj)?
     };
 
-    transformer::show(&x)?;
+    ////////
 
-    Ok(())
-}
-*/
-
-use std::error::Error;
-use std::time::Instant;
-
-use rand::SeedableRng;
-use rand::rngs::ChaCha20Rng;
-use tenferro_cpu::CpuBackend;
-use tenferro_runtime::TypedTensor;
-
-pub mod decoder;
-pub mod loader;
-pub mod model;
-pub mod saver;
-pub mod unet;
-pub mod util;
-
-fn main() -> Result<(), Box<dyn Error>> {
-    let ref_ = loader::load_safetensors("../../Downloads/fref.safetensors")?;
-    let args: Vec<String> = std::env::args().collect();
     let fmodel = {
         let tensors = {
             let path = &format!("{}/model.safetensors", &args[1]);
@@ -144,10 +130,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         model::get_fmodel(tensors)?
     };
-
-    let args: Vec<String> = std::env::args().collect();
-
-    let tensors = loader::load_safetensors("../../Downloads/dref1.safetensors")?;
 
     let dmodel = {
         let tensors = {
@@ -157,22 +139,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         model::get_dmodel(tensors)?
     };
 
-    println!("==== Diffusion Process ====");
+    println!("==== U-Net: Diffusion Process ====");
     println!("\"t = 0\" is the last one.");
 
     let mut rng = ChaCha20Rng::seed_from_u64(2269);
     let tensor = util::randn(vec![64, 64, 4, 1], &mut rng)?;
 
-    let tensor = unet::forward(&tensor, &ref_["c"], 900,  800, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 800,  700, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 700,  600, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 600,  500, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 500,  400, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 400,  300, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 300,  200, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 200,  100, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 100,    0, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &ref_["c"],   0, -100, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 900,  800, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 800,  700, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 700,  600, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 600,  500, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 500,  400, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 400,  300, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 300,  200, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 200,  100, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 100,    0, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x,   0, -100, &fmodel, &mut rng)?;
 
     println!("==== Decoding Process ====");
 
