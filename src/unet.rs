@@ -8,7 +8,7 @@ use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 use crate::model::{Fablock, Fmodel, Frblock, Frcblock};
-use crate::util::{conv11, conv31, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu};
+use crate::util::{conv11, conv31, conv32, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu};
 
 fn calc_frblock(
     tensor: &TypedTensor<f32>,
@@ -55,7 +55,8 @@ fn calc_frcblock(
 
     let timef = silu(&timef, backend)?;
     let timef = timef.reshape(&[1280, 1], backend)?;
-    let b = frcblock.b.reshape(&[num_c, 1], backend)?;
+    let num = frcblock.b.shape()[0];
+    let b = frcblock.b.reshape(&[num, 1], backend)?;
     let timef = frcblock.w.matmul(&timef, backend)?.add(&b, backend)?;
 
     let tmp = tmp.add(&timef, backend)?;
@@ -75,60 +76,30 @@ fn calc_fablock(
     fablock: &Fablock,
     backend: &mut CpuBackend,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
-    println!("\x1b[91m");
-    show(&tensor)?;
-
     let tmp = groupnorm_micro(tensor, &fablock.g1, &fablock.t1, 32, backend)?;
     // TODO: I just noticed the reference implementation has eps=1e-6 here, not usual 1e-5.
     // I totally missed that in my Julia version.
     // This may be the true cause of the slight calculation error in my Julia version!
     // I believe it won't affect the result image drastically, though.
 
-    println!("\x1b[92m");
-    show(&tmp)?;
-
     let tmp = conv11(&tmp, &fablock.wc1, &fablock.bc1, backend)?;
 
-    println!("\x1b[93m");
-    show(&tmp)?;
-
     let tmp2 = layernorm(&tmp, &fablock.g2, &fablock.t2, backend)?;
-
-    println!("\x1b[94m");
-    show(&tmp2)?;
 
     let num_c1 = fablock.w21.shape()[0];
     let zero_vector = TypedTensor::<f32>::from_vec_col_major(vec![], vec![0.0])?;
     let zero_vector = zero_vector.broadcast_in_dim(&[num_c1], &[], backend)?;
     let tmp2 = self_attention(&tmp2, &fablock.w21, &zero_vector, &fablock.w22, &fablock.b22, 8, backend)?;
 
-    println!("\x1b[95m");
-    show(&tmp2)?;
-
     let tmp = tmp.add(&tmp2, backend)?;
-
-    println!("\x1b[96m");
-    show(&tensor)?;
 
     let tmp2 = layernorm(&tmp, &fablock.g3, &fablock.t3, backend)?;
 
-    println!("\x1b[31m");
-    show(&tmp2)?;
-
     let tmp2 = cross_attention(&tmp2, &context, &fablock.w31q, &fablock.w31k, &fablock.w31v, &fablock.w32, &fablock.b32, 8, backend)?;
-
-    println!("\x1b[32m");
-    show(&tmp2)?;
 
     let tmp = tmp.add(&tmp2, backend)?;
 
-    println!("\x1b[33m");
-    show(&tmp2)?;
-
     let tmp2 = layernorm(&tmp, &fablock.g4, &fablock.t4, backend)?; // [x, y, c, n]
-
-    println!("\x1b[34m");
-    show(&tmp2)?;
 
     let num_d = fablock.b41.shape()[0];
     let b41 = fablock.b41.reshape(&[1, 1, 1, num_d], backend)?; // [1, 1, 1, d]
@@ -151,43 +122,21 @@ fn calc_fablock(
         chunks.next().unwrap().to_vec(),
     )?; // [x, y, n, e]
 
-    println!("\x1b[35m");
-    show(&tmp2)?;
-
-    println!("\x1b[35m");
-    show(&tmp3)?;
-
     let tmp3 = gelu(&tmp3, backend)?; // [x, y, n, e]
     let tmp2 = tmp2.mul(&tmp3, backend)?; // [x, y, n, e]
-
-    println!("\x1b[36m");
-    show(&tmp2)?;
 
     let num_c = fablock.b42.shape()[0];
     let b42 = fablock.b42.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
     let tmp2 = [&fablock.w42, &tmp2].einsum("ce,xyne->xycn", backend)? // [x, y, c, n]
         .add(&b42, backend)?; // [x, y, c, n]
 
-    println!("\x1b[91m");
-    show(&tmp2)?;
-
     let tmp = tmp.add(&tmp2, backend)?;
-
-    println!("\x1b[92m");
-    show(&tmp)?;
 
     let tmp = conv11(&tmp, &fablock.wc4, &fablock.bc4, backend)?;
 
-    println!("\x1b[93m");
-    show(&tmp)?;
-
     let tensor = tensor.add(&tmp, backend)?;
 
-    println!("\x1b[94m");
-    show(&tensor)?;
-
     Ok(tensor)
-    // attention block finished!
 }
 
 pub fn forward(
@@ -226,10 +175,34 @@ pub fn forward(
     let time_b2 = fmodel.time_b2.reshape(&[1280, 1], &mut backend)?;
     let timef = fmodel.time_w2.matmul(&timef, &mut backend)?.add(&time_b2, &mut backend)?;
 
-    print!("\rfconv_i0\x1b[K");   stdout().flush()?; let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
-    print!("\rfrblock_i1\x1b[K"); stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i1, &mut backend)?;
-    print!("\rfablock_i1\x1b[K"); stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i1, &mut backend)?;
+    print!("\rfconv_i0\x1b[K");    stdout().flush()?; let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
+    print!("\rfrblock_i1\x1b[K");  stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i1, &mut backend)?;
+    print!("\rfablock_i1\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i1, &mut backend)?;
+    print!("\rfrblock_i2\x1b[K");  stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i2, &mut backend)?;
+    print!("\rfablock_i2\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i2, &mut backend)?;
+    print!("\rfconv_i3\x1b[K");    stdout().flush()?; let tensor = conv32(&tensor, &fmodel.fconv_i3.wc, &fmodel.fconv_i3.bc, &mut backend)?;
+    print!("\rfrcblock_i4\x1b[K"); stdout().flush()?; let tensor = calc_frcblock(&tensor, &timef, &fmodel.frcblock_i4, &mut backend)?;
+    print!("\rfablock_i4\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i4, &mut backend)?;
+    print!("\rfrblock_i5\x1b[K");  stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i5, &mut backend)?;
+    print!("\rfablock_i5\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i5, &mut backend)?;
+    print!("\rfconv_i6\x1b[K");    stdout().flush()?; let tensor = conv32(&tensor, &fmodel.fconv_i6.wc, &fmodel.fconv_i6.bc, &mut backend)?;
+    print!("\rfrcblock_i7\x1b[K"); stdout().flush()?; let tensor = calc_frcblock(&tensor, &timef, &fmodel.frcblock_i7, &mut backend)?;
+    print!("\rfablock_i7\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i7, &mut backend)?;
+    print!("\rfrblock_i8\x1b[K");  stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i8, &mut backend)?;
+    print!("\rfablock_i8\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i8, &mut backend)?;
+    print!("\rfconv_i9\x1b[K");    stdout().flush()?; let tensor = conv32(&tensor, &fmodel.fconv_i9.wc, &fmodel.fconv_i9.bc, &mut backend)?;
+    print!("\rfrblock_i10\x1b[K"); stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i10, &mut backend)?;
+    print!("\rfrblock_i11\x1b[K"); stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i11, &mut backend)?;
+    print!("\rfrblock_m0\x1b[K");  stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_m0, &mut backend)?;
+    print!("\rfablock_m1\x1b[K");  stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_m1, &mut backend)?;
+    print!("\rfrblock_m2\x1b[K");  stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_m2, &mut backend)?;
+
+    show(&tensor)?;
+
     println!("\r\x1b[K"); stdout().flush();
+
+    // There still is a slight numerical difference from the reference implementation.
+    // eps=1e-6 may not be the only reason...
 
     Ok(())
 }

@@ -916,7 +916,5 @@ pub fn cross_attention(
         .einsum("cC,xyCn->xycn", backend)? // [x, y, c, n]
         .add(&out_bias, backend)?; // [x, y, c, n]
 
-    show(&tensor)?;
-
     Ok(tensor)
 }
