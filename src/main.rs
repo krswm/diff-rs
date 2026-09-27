@@ -144,20 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         model::get_fmodel(tensors)?
     };
-    let tensor = unet::forward(&ref_["x"], &ref_["c"], 900, 800, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 800,  700, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 700,  600, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 600,  500, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 500,  400, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 400,  300, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 300,  200, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 200,  100, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 100,    0, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"],   0, -100, &fmodel)?;
-    util::show(&tensor)?;
-    // Expected result!
 
-    /*
     let args: Vec<String> = std::env::args().collect();
 
     let tensors = loader::load_safetensors("../../Downloads/dref1.safetensors")?;
@@ -170,13 +157,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         model::get_dmodel(tensors)?
     };
 
-    let tensor = decoder::decode(&tensors["x"], dmodel)?;
+    println!("==== Diffusion Process ====");
+    println!("\"t = 0\" is the last one.");
 
+    let tensor = unet::forward(&ref_["x"], &ref_["c"], 900, 800, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 800,  700, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 700,  600, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 600,  500, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 500,  400, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 400,  300, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 300,  200, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 200,  100, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 100,    0, &fmodel)?;
+    let tensor = unet::forward(&tensor, &ref_["c"],   0, -100, &fmodel)?;
+
+    println!("==== Decoding Process ====");
+
+    let tensor = decoder::decode(&tensor, dmodel)?;
     util::show(&tensor)?;
-
-    // let ref_ = loader::load_safetensors("../../Downloads/decref.safetensors")?;
     saver::save_as_netppm_image(&tensor, &args[2]);
-    */
+
+    println!("==== Process Finished ====");
+    println!("AI-Generated image saved at {}", &args[2]);
     
     Ok(())
 }
