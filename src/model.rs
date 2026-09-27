@@ -649,9 +649,9 @@ pub fn get_fablock(
 
     let g4   = tensors[&format!("{prefix}.transformer_blocks.0.norm3.weight")].duplicate()?;
     let t4   = tensors[&format!("{prefix}.transformer_blocks.0.norm3.bias")].duplicate()?;
-    let w41  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.weight")].transpose(&[1, 0], &mut backend)?;
+    let w41  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.weight")].duplicate()?;
     let b41  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.bias")].duplicate()?;
-    let w42  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.weight")].transpose(&[1, 0], &mut backend)?;
+    let w42  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.weight")].duplicate()?;
     let b42  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.bias")].duplicate()?;
     let wc4  = tensors[&format!("{prefix}.proj_out.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc4  = tensors[&format!("{prefix}.proj_out.bias")].duplicate()?;

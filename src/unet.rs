@@ -4,10 +4,11 @@ use std::error::Error;
 use std::io::{Write, stdout};
 
 use tenferro_cpu::CpuBackend;
+use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 use crate::model::{Fablock, Fmodel, Frblock, Frcblock};
-use crate::util::{conv11, conv31, cross_attention, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu};
+use crate::util::{conv11, conv31, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu};
 
 fn calc_frblock(
     tensor: &TypedTensor<f32>,
@@ -73,7 +74,7 @@ fn calc_fablock(
     context: &TypedTensor<f32>,
     fablock: &Fablock,
     backend: &mut CpuBackend,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     println!("\x1b[91m");
     show(&tensor)?;
 
@@ -129,10 +130,64 @@ fn calc_fablock(
     println!("\x1b[34m");
     show(&tmp2)?;
 
+    let num_d = fablock.b41.shape()[0];
+    let b41 = fablock.b41.reshape(&[1, 1, 1, num_d], backend)?; // [1, 1, 1, d]
+    let tmp2 = [&fablock.w41, &tmp2].einsum("dc,xycn->xynd", backend)? // [x, y, n, d]
+        .add(&b41, backend)?; // [x, y, n, d]
+
+    // chunk split for dimension d into half
+    let num_x = tmp2.shape()[0];
+    let num_y = tmp2.shape()[1];
+    let num_n = tmp2.shape()[2];
+    let num_e = num_d / 2;
+    let mut chunks = tmp2.host_data()?.chunks(num_x * num_y * num_n * num_e); // as if [2][x, y, n, e]
+
+    let tmp2 = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_n, num_e],
+        chunks.next().unwrap().to_vec(),
+    )?; // [x, y, n, e]
+    let tmp3 = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_n, num_e],
+        chunks.next().unwrap().to_vec(),
+    )?; // [x, y, n, e]
+
     println!("\x1b[35m");
     show(&tmp2)?;
 
-    Ok(())
+    println!("\x1b[35m");
+    show(&tmp3)?;
+
+    let tmp3 = gelu(&tmp3, backend)?; // [x, y, n, e]
+    let tmp2 = tmp2.mul(&tmp3, backend)?; // [x, y, n, e]
+
+    println!("\x1b[36m");
+    show(&tmp2)?;
+
+    let num_c = fablock.b42.shape()[0];
+    let b42 = fablock.b42.reshape(&[1, 1, num_c, 1], backend)?; // [1, 1, c, 1]
+    let tmp2 = [&fablock.w42, &tmp2].einsum("ce,xyne->xycn", backend)? // [x, y, c, n]
+        .add(&b42, backend)?; // [x, y, c, n]
+
+    println!("\x1b[91m");
+    show(&tmp2)?;
+
+    let tmp = tmp.add(&tmp2, backend)?;
+
+    println!("\x1b[92m");
+    show(&tmp)?;
+
+    let tmp = conv11(&tmp, &fablock.wc4, &fablock.bc4, backend)?;
+
+    println!("\x1b[93m");
+    show(&tmp)?;
+
+    let tensor = tensor.add(&tmp, backend)?;
+
+    println!("\x1b[94m");
+    show(&tensor)?;
+
+    Ok(tensor)
+    // attention block finished!
 }
 
 pub fn forward(
@@ -171,9 +226,9 @@ pub fn forward(
     let time_b2 = fmodel.time_b2.reshape(&[1280, 1], &mut backend)?;
     let timef = fmodel.time_w2.matmul(&timef, &mut backend)?.add(&time_b2, &mut backend)?;
 
-    print!("\rfconv_i0\x1b[K");   stdout().flush(); let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
-    print!("\rfrblock_i1\x1b[K"); stdout().flush(); let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i1, &mut backend)?;
-    print!("\rfablock_i1\x1b[K"); stdout().flush(); let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i1, &mut backend)?;
+    print!("\rfconv_i0\x1b[K");   stdout().flush()?; let tensor = conv31(&tensor, &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
+    print!("\rfrblock_i1\x1b[K"); stdout().flush()?; let tensor = calc_frblock(&tensor, &timef, &fmodel.frblock_i1, &mut backend)?;
+    print!("\rfablock_i1\x1b[K"); stdout().flush()?; let tensor = calc_fablock(&tensor, &context, &fmodel.fablock_i1, &mut backend)?;
     println!("\r\x1b[K"); stdout().flush();
 
     Ok(())
