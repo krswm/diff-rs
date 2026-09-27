@@ -272,10 +272,13 @@ pub fn forward(
     let tensor = cat(&tensor, &tensor_i0, &mut backend)?;
     print!("\r43/45 frcblock_o11\x1b[K"); stdout().flush()?; let tensor    = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o11, &mut backend)?;
     print!("\r44/45 fablock_o11\x1b[K");  stdout().flush()?; let tensor    = calc_fablock (&tensor,     &context, &fmodel.fablock_o11, &mut backend)?;
-    show(&tensor)?;
+    print!("\r\x1b[K"); stdout().flush();
 
-    println!("\r\x1b[K"); stdout().flush();
-    // Expected result!
+    let tensor = groupnorm(&tensor, &fmodel.g_final, &fmodel.t_final, 32, &mut backend)?;
+    let tensor = silu(&tensor, &mut backend)?;
+    let tensor = conv31(&tensor, &fmodel.wc_final, &fmodel.bc_final, &mut backend)?;
+
+    show(&tensor)?;
 
     // There still is a slight numerical difference from the reference implementation.
     // eps=1e-6 may not be the only reason...
