@@ -7,6 +7,7 @@ use tenferro_cpu::CpuBackend;
 use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
+use crate::loader::load_safetensors;
 use crate::model::{Fablock, Fconv, Fmodel, Frblock, Frcblock};
 use crate::util::{conv11, conv31, conv32, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu, upsample};
 
@@ -185,7 +186,7 @@ pub fn forward(
     curr_time: i32,
     prev_time: i32,
     fmodel: &Fmodel,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
     println!("--- t = {curr_time} (t_prev = {prev_time}) ----");
@@ -330,10 +331,17 @@ pub fn forward(
     let y3 = tensor_orig.mul(&c3, &mut backend)?;
     let mu_t = y2.add(&y3, &mut backend)?;
 
-    show(&mu_t)?;
+    let tensor = if curr_time > 0 {
+        let ref_ = load_safetensors("../../Downloads/rand42.safetensors")?;
+        let noise = &ref_[&format!("n{curr_time}")].transpose(&[3, 2, 1, 0], &mut backend)?;
+        let c4 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![((1.0f32 - prev_alpha_bar) / (1.0f32 - curr_alpha_bar) * (1.0 - alpha_t)).sqrt()])?;
+        noise.mul(&c4, &mut backend)?.add(&mu_t, &mut backend)?
+    } else {
+        mu_t
+    };
 
-    // There still is a slight numerical difference from the reference implementation.
-    // eps=1e-6 may not be the only reason...
+    show(&tensor)?;
 
-    Ok(())
+    Ok(tensor)
+    // U-net done!
 }
