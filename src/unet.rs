@@ -340,8 +340,6 @@ pub fn forward(
         mu_t
     };
 
-    show(&tensor)?;
-
     Ok(tensor)
     // U-net done!
 }
