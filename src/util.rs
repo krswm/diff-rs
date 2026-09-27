@@ -612,6 +612,72 @@ pub fn groupnorm_micro(
     Ok(x)
 }
 
+pub fn conv(
+    tensor: &TypedTensor<f32>,
+    weight: &TypedTensor<f32>,
+    bias: &TypedTensor<f32>,
+    stride: usize,
+    backend: &mut CpuBackend,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    let num_xi = weight.shape()[0];
+    let num_eta = weight.shape()[1];
+    let num_i = weight.shape()[2];
+    let num_o = weight.shape()[3];
+
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_n = tensor.shape()[3];
+
+    let num_p = num_xi * num_eta * num_i;
+
+    let num_a = num_x / stride; // X
+    let num_b = num_y / stride; // Y
+
+    assert!(num_xi == num_eta);
+    assert!(num_xi % 2 == 1);
+    let pad = num_xi / 2;
+
+    // weight [xi, eta, i, o]
+    let ff = weight.reshape(&[num_p, num_o], backend)?; // [p, o]
+
+    // tensor [x, y, i, n]
+    let ii = {
+        let mut colmaj = Vec::with_capacity(num_a * num_b * num_xi * num_eta * num_i * num_n);
+        for n in 0..num_n {
+            for b in 0..num_b {
+                for a in 0..num_a {
+                    for i in 0..num_i {
+                        for eta in 0..num_eta {
+                            for xi in 0..num_xi {
+                                let x = stride * a;
+                                let y = stride * b;
+                                let xx = x + xi - pad;
+                                let yy = y + eta - pad;
+                                let value = if /* xx >= 0 && */ xx < num_x && /* yy >= 0 && */ yy < num_y {
+                                    *tensor.get(&[xx, yy, i, n])?
+                                } else {
+                                    0.0f32
+                                };
+                                colmaj.push(value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        TypedTensor::<f32>::from_vec_col_major(vec![num_p, num_a, num_b, num_n], colmaj)?
+    }; // [p, a, b, n]
+
+    let o = [&ff, &ii].einsum("po,pabn->abon", backend)?; // [a, b, o, n]
+
+    // bias [o]
+    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [1, 1, o, 1]
+
+    let o = o.add(&bias, backend)?; // [a, b, o, n]
+
+    Ok(o)
+}
+
 pub fn conv11(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
@@ -623,27 +689,7 @@ pub fn conv11(
     // "1" -> stride: 1
     // The convoluted tensor has same x and y size as `tensor`.
 
-    // i: input channels
-    // o: output channels
-
-    // tensor [x, y, i, n]
-    // weight [1, 1, i, o]
-    // bias   [o]
-
-    let num_x = tensor.shape()[0];
-    let num_y = tensor.shape()[1];
-    let num_i = tensor.shape()[2];
-    let num_n = tensor.shape()[3];
-    let num_o = weight.shape()[3];
-
-    // I can utilize kernel size being 1.
-    let weight = weight.reshape(&[num_i, num_o], backend)?; // [i, o]
-
-    let aa = [&weight, tensor].einsum("io,xyin->xyon", backend)?; // [x, y, o, n]
-
-    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [x, y, o, n]
-
-    let result = aa.add(&bias, backend)?; // [x, y, o, n]
+    let result = conv(tensor, weight, bias, 1, backend)?;
 
     Ok(result)
 }
@@ -659,140 +705,7 @@ pub fn conv31(
     // "1" -> stride: 1
     // The convoluted tensor has same x and y size as `tensor`.
 
-    /*
-    show(&weight)?;
-    println!();
-    show(&bias)?;
-    println!();
-    show(&tensor)?;
-    println!();
-    */
-
-    // i: input channels
-    // o: output channels
-    // a: convolution weight, x-axis, 0 <= a < 3
-    // b: convolution weight, y-axis, 0 <= b < 3
-
-    // tensor [x, y, i, n]
-    // weight [a, b, i, o]
-    // bias   [o]
-
-    let num_x = tensor.shape()[0];
-    let num_y = tensor.shape()[1];
-    let num_i = tensor.shape()[2];
-    let num_n = tensor.shape()[3];
-    let num_o = weight.shape()[3];
-
-    // I know there's a matmul-based algorithm,
-    // but it involves L^4-element tensor (where L is length of a side of tensor).
-    // There is a solution to use sparse tensor since the most of the elements
-    // of the L^4-element tensor is zero.
-    // However, I unfortunately am lacking knowledge on how to use sparse tensors in tenferro currently.
-    // I have to research more. It seems like tenferro accepts extension
-    // so I may be able to utilize it.
-    // Just for now, I'll implement 2D convolution naively
-    // and see how the performance is.
-
-    // let mut colmaj = Vec::new();
-    /*
-    let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
-
-    for n in 0..num_n {
-        for o in 0..num_o {
-            for y in 0..num_y {
-                for x in 0..num_x {
-                    let mut ans = 0.0f32;
-                    for i in 0..num_i {
-                        for a in 0..3 {
-                            for b in 0..3 {
-                                let xx = x + a - 1;
-                                let yy = y + b - 1;
-                                if xx >= 0 && xx < num_x && yy >= 0 && yy < num_y {
-                                    ans += *weight.get(&[a, b, i, o])? * *tensor.get(&[xx, yy, i, n])?;
-                                }
-                            }
-                        }
-                    }
-                    ans += *bias.get(&[o])?;
-                    colmaj.push(ans);
-                }
-            }
-        }
-    }
-
-    let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x, num_y, num_o, num_n], colmaj)?;
-
-    cshow(&result)?;
-    */
-
-    /*
-    // Now, matmul-based algorithm but with dense tensor.
-
-    let num_z = num_x * num_y;
-
-    println!("#### A ####");
-    let ff = {
-        let mut colmaj = Vec::with_capacity(num_z * num_z * num_i * num_o);
-        for o in 0..num_o {
-            for i in 0..num_i {
-                for Z in 0..num_z {
-                    for z in 0..num_z {
-                        let value = 0.0;
-                        colmaj.push(value)
-                    }
-                }
-            }
-        }
-        TypedTensor::<f32>::from_vec_col_major(vec![num_z, num_z, num_i, num_o], colmaj)?
-    }; // [Z, z, i, o]
-
-    println!("#### B ####");
-    let ii = tensor.reshape(&[num_z, num_i, num_n], backend)?;  // [z, i, n]
-
-    println!("#### C ####");
-    /*
-    let result = [&ff, &ii]
-        .einsum("Zzio,zin->Zion", backend)? // [Z, i, o, n]
-        .reduce_sum(&[1], backend)? // [Z, o, n]
-        .reshape(&[num_x, num_y, num_o, num_n], backend)?; // [x, y, o, n]
-    */
-    let result = [&ff, &ii]
-        .einsum("Zzio,zin->Zon", backend)? // [Z, o, n]
-        .reshape(&[num_x, num_y, num_o, num_n], backend)?; // [x, y, o, n]
-
-    println!("#### D ####");
-    cshow(&result)?;
-    */
-
-    let aa = [weight, tensor].einsum("abio,xyin->abxyon", backend)?; // [a, b, x, y, o, n]
-    
-    let num_p = num_o * num_n;
-    
-    let aa = aa.reshape(&[3, 3, num_x, num_y, num_p], backend)?; // [a, b, x, y, p]
-
-    let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
-    for p in 0..num_p {
-        for y in 0..num_y {
-            for x in 0..num_x {
-                let mut ans = 0.0f32;
-                for a in 0..3 {
-                    for b in 0..3 {
-                        let xx = x + a - 1;
-                        let yy = y + b - 1;
-                        if xx >= 0 && xx < num_x && yy >= 0 && yy < num_y {
-                            ans += *aa.get(&[a, b, xx, yy, p])?;
-                        }
-                    }
-                }
-                colmaj.push(ans);
-            }
-        }
-    }
-
-    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [x, y, o, n]
-
-    let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x, num_y, num_o, num_n], colmaj)?; // [x, y, o, n]
-    let result = result.add(&bias, backend)?; // [x, y, o, n]
+    let result = conv(tensor, weight, bias, 1, backend)?;
 
     Ok(result)
 }
@@ -808,59 +721,7 @@ pub fn conv32(
     // "2" -> stride: 2
     // The convoluted tensor has a half x and y size as `tensor` (thus the area shrinks by 1/4).
 
-    /*
-    show(&weight)?;
-    println!();
-    show(&bias)?;
-    println!();
-    show(&tensor)?;
-    println!();
-    */
-
-    // i: input channels
-    // o: output channels
-    // a: convolution weight, x-axis, 0 <= a < 3
-    // b: convolution weight, y-axis, 0 <= b < 3
-
-    // tensor [x, y, i, n]
-    // weight [a, b, i, o]
-    // bias   [o]
-
-    let num_x = tensor.shape()[0];
-    let num_y = tensor.shape()[1];
-    let num_i = tensor.shape()[2];
-    let num_n = tensor.shape()[3];
-    let num_o = weight.shape()[3];
-
-    let aa = [weight, tensor].einsum("abio,xyin->abxyon", backend)?; // [a, b, x, y, o, n]
-    
-    let num_p = num_o * num_n;
-    
-    let aa = aa.reshape(&[3, 3, num_x, num_y, num_p], backend)?; // [a, b, x, y, p]
-
-    let mut colmaj = Vec::with_capacity(num_x * num_y * num_o * num_n);
-    for p in 0..num_p {
-        for y in 0..(num_y / 2) {
-            for x in 0..(num_x / 2) {
-                let mut ans = 0.0f32;
-                for a in 0..3 {
-                    for b in 0..3 {
-                        let xx = 2 * x + a - 1;
-                        let yy = 2 * y + b - 1;
-                        if xx >= 0 && xx < num_x && yy >= 0 && yy < num_y {
-                            ans += *aa.get(&[a, b, xx, yy, p])?;
-                        }
-                    }
-                }
-                colmaj.push(ans);
-            }
-        }
-    }
-
-    let bias = bias.reshape(&[1, 1, num_o, 1], backend)?; // [x, y, o, n]
-
-    let result = TypedTensor::<f32>::from_vec_col_major(vec![num_x / 2, num_y / 2, num_o, num_n], colmaj)?; // [x', y', o, n]
-    let result = result.add(&bias, backend)?; // [x', y', o, n]
+    let result = conv(tensor, weight, bias, 2, backend)?;
 
     Ok(result)
 }
