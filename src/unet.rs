@@ -180,7 +180,7 @@ fn calc_upsample(
 }
 
 pub fn forward(
-    tensor: &TypedTensor<f32>,
+    tensor_orig: &TypedTensor<f32>,
     context: &TypedTensor<f32>,
     curr_time: i32,
     prev_time: i32,
@@ -205,7 +205,7 @@ pub fn forward(
     // Tensor, EagerTensor, and TracedTensor have `stack`... I may have to use them instead...
     let timef = TypedTensor::<f32>::from_vec_col_major(vec![320], colmaj)?;
 
-    let tensor = tensor.broadcast_in_dim(&[64, 64, 4, 2], &[0, 1, 2, 3], &mut backend)?;
+    let tensor = tensor_orig.broadcast_in_dim(&[64, 64, 4, 2], &[0, 1, 2, 3], &mut backend)?;
 
     let timef = timef.reshape(&[320, 1], &mut backend)?;
     let time_b1 = fmodel.time_b1.reshape(&[1280, 1], &mut backend)?;
@@ -278,7 +278,59 @@ pub fn forward(
     let tensor = silu(&tensor, &mut backend)?;
     let tensor = conv31(&tensor, &fmodel.wc_final, &fmodel.bc_final, &mut backend)?;
 
-    show(&tensor)?;
+    let num_x = tensor.shape()[0];
+    let num_y = tensor.shape()[1];
+    let num_c = tensor.shape()[2];
+    let num_n = tensor.shape()[3];
+    let mut chunks = tensor.host_data()?.chunks(num_x * num_y * num_c);
+    let tensor_positive = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_c, 1],
+        chunks.next().unwrap().to_vec(),
+    )?;
+    let tensor_negative = TypedTensor::<f32>::from_vec_col_major(
+        vec![num_x, num_y, num_c, 1],
+        chunks.next().unwrap().to_vec(),
+    )?;
+    let config_scale = TypedTensor::<f32>::from_vec_col_major(vec![], vec![8.0])?;
+    let tensor = tensor_positive.sub(&tensor_negative, &mut backend)?.mul(&config_scale, &mut backend)?.add(&tensor_negative, &mut backend)?;
+
+    // 1 .- range(√0.00085f0, √0.0120f0, 1000) .^ 2
+    let alphas: Vec<f32> = (0..1000).map(
+        |a| 1.0f32 - (0.00085f32.sqrt() + (0.0120f32.sqrt() - 0.00085f32.sqrt()) * ((a as f32) / 999.0f32)).powi(2)
+    ).collect();
+
+    let cumprod_alphas: Vec<f32> = {
+        let mut v = Vec::<f32>::with_capacity(1000);
+        let mut prod = 1.0f32;
+        for a in alphas {
+            prod *= a;
+            v.push(prod);
+        }
+        v
+    };
+
+    let curr_alpha_bar = cumprod_alphas[curr_time as usize];
+    let prev_alpha_bar = if prev_time >= 0 { cumprod_alphas[prev_time as usize] } else { 1.0f32 };
+    let alpha_t = curr_alpha_bar / prev_alpha_bar;
+
+    // References: "Denoising Diffusion Probabilistic Models"
+    // https://arxiv.org/pdf/2006.11239
+
+    // xₜ -> tensor_orig
+    // ϵ -> tensor
+
+    let c0 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![(1.0f32 - curr_alpha_bar).sqrt()])?;
+    let c1 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![curr_alpha_bar.sqrt()])?;
+    let y0 = tensor.mul(&c0, &mut backend)?;
+    let x0 = tensor_orig.sub(&y0, &mut backend)?.div(&c1, &mut backend)?;
+
+    let c2 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![prev_alpha_bar.sqrt() * (1.0f32 - alpha_t) / (1.0f32 - curr_alpha_bar)])?;
+    let c3 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![alpha_t.sqrt() * (1.0f32 - prev_alpha_bar) / (1.0f32 - curr_alpha_bar)])?;
+    let y2 = x0.mul(&c2, &mut backend)?;
+    let y3 = tensor_orig.mul(&c3, &mut backend)?;
+    let mu_t = y2.add(&y3, &mut backend)?;
+
+    show(&mu_t)?;
 
     // There still is a slight numerical difference from the reference implementation.
     // eps=1e-6 may not be the only reason...
