@@ -160,16 +160,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("==== Diffusion Process ====");
     println!("\"t = 0\" is the last one.");
 
-    let tensor = unet::forward(&ref_["x"], &ref_["c"], 900, 800, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 800,  700, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 700,  600, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 600,  500, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 500,  400, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 400,  300, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 300,  200, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 200,  100, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"], 100,    0, &fmodel)?;
-    let tensor = unet::forward(&tensor, &ref_["c"],   0, -100, &fmodel)?;
+    let mut rng = ChaCha20Rng::seed_from_u64(2269);
+    let tensor = util::randn(vec![64, 64, 4, 1], &mut rng)?;
+
+    let tensor = unet::forward(&tensor, &ref_["c"], 900,  800, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 800,  700, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 700,  600, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 600,  500, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 500,  400, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 400,  300, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 300,  200, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 200,  100, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"], 100,    0, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &ref_["c"],   0, -100, &fmodel, &mut rng)?;
 
     println!("==== Decoding Process ====");
 
@@ -178,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     saver::save_as_netppm_image(&tensor, &args[2]);
 
     println!("==== Process Finished ====");
-    println!("AI-Generated image saved at {}", &args[2]);
+    println!("AI-Generated image saved at {} (PPM image format)", &args[2]);
     
     Ok(())
 }

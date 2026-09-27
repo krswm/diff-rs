@@ -3,13 +3,14 @@
 use std::error::Error;
 use std::io::{Write, stdout};
 
+use rand::rngs::ChaCha20Rng;
 use tenferro_cpu::CpuBackend;
 use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 use crate::loader::load_safetensors;
 use crate::model::{Fablock, Fconv, Fmodel, Frblock, Frcblock};
-use crate::util::{conv11, conv31, conv32, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, self_attention, show, silu, upsample};
+use crate::util::{conv11, conv31, conv32, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, randn, self_attention, show, silu, upsample};
 
 fn calc_frblock(
     tensor: &TypedTensor<f32>,
@@ -186,6 +187,7 @@ pub fn forward(
     curr_time: i32,
     prev_time: i32,
     fmodel: &Fmodel,
+    rng: &mut ChaCha20Rng,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
@@ -332,8 +334,7 @@ pub fn forward(
     let mu_t = y2.add(&y3, &mut backend)?;
 
     let tensor = if curr_time > 0 {
-        let ref_ = load_safetensors("../../Downloads/rand42.safetensors")?;
-        let noise = &ref_[&format!("n{curr_time}")].transpose(&[3, 2, 1, 0], &mut backend)?;
+        let noise = randn(vec![64, 64, 4, 1], rng)?;
         let c4 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![((1.0f32 - prev_alpha_bar) / (1.0f32 - curr_alpha_bar) * (1.0 - alpha_t)).sqrt()])?;
         noise.mul(&c4, &mut backend)?.add(&mu_t, &mut backend)?
     } else {
