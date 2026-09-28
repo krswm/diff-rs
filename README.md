@@ -71,7 +71,7 @@ magick output.ppm output.png
 
 - [*Denoising Diffusion Probabilistic Models*](https://arxiv.org/abs/2006.11239) for devising DDPM.
 - [*Convolution as Matrix Multiplication*](https://github.com/alisaaalehi/convolution_as_multiplication) and [*Implement convolutions as matrix operations using im2col*](https://numb3r33.github.io/experiments/convolution/math/deeplearning/2023/12/23/im2col.html) for teaching me how to implement 2D convolution with a matrix-multiplication-based algorithm.
-- [*pytorch-stable-diffusion*](https://github.com/hkproj/pytorch-stable-diffusion) for teaching me the technical aspect of the model and providing me a reference implementation.
+- [*Stable Diffusion implemented from scratch in PyTorch*](https://github.com/hkproj/pytorch-stable-diffusion) for teaching me the technical aspect of the model and providing me a reference implementation.
 - [tenferro](https://github.com/tensor4all/tenferro-rs) for providing me an amazing tensor library for Rust. I would not even start this project if tenferro were not released.
 
 # Development
@@ -92,5 +92,5 @@ I am looking forward to implement something scientific based on this project in 
 This is a hobby project of mine I started from scratch.
 I enjoyed a lot by working on this project!
 
-I used [the model weight of Stable Diffusion](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and [a reference implementation (*pytorch-stable-diffusion*)](https://github.com/hkproj/pytorch-stable-diffusion) only for the purpose to observe their behavior as diffusion model architecture.
+I used [the model weight of Stable Diffusion](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and [a reference implementation (*Stable Diffusion implemented from scratch in PyTorch*)](https://github.com/hkproj/pytorch-stable-diffusion) only for the purpose to observe their behavior as diffusion model architecture.
 Except for that, I did **not** use generative AI for this project at all.
