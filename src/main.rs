@@ -59,7 +59,7 @@ fn get_prompt_embedding(
             let output = transformer::transformer(
                 *id,
                 pos,
-                &model,
+                model,
                 &mut k_colmaj_caches,
                 &mut v_colmaj_caches,
                 &mut backend,
@@ -186,7 +186,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("==== Decoding Process ====");
 
     let tensor = decoder::decode(&tensor, dmodel)?;
-    saver::save_as_netppm_image(&tensor, &args[2]);
+    saver::save_as_netppm_image(&tensor, &args[2])?;
 
     println!("==== Process Finished ====");
     println!("AI-Generated image saved at {} (PPM image format)", &args[2]);

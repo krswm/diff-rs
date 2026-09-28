@@ -41,14 +41,14 @@ pub fn save_as_netppm_image(tensor: &TypedTensor<f32>, path: &str) -> Result<(),
 
     // The image is RGB (P3) with width `num_x` and height `num_y`.
     // The range of the value for R, G, and B is 0 to 255 (256 possible values).
-    file.write_all(format!("P3 {num_x} {num_y} 255\n").as_bytes());
+    file.write_all(format!("P3 {num_x} {num_y} 255\n").as_bytes())?;
 
     for y in 0..num_y {
         for x in 0..num_x {
             let r = tensor.get(&[x, y, 0, 0])?;
             let g = tensor.get(&[x, y, 1, 0])?;
             let b = tensor.get(&[x, y, 2, 0])?;
-            file.write_all(format!("{r:.0} {g:.0} {b:.0}\n").as_bytes());
+            file.write_all(format!("{r:.0} {g:.0} {b:.0}\n").as_bytes())?;
         }
     }
     

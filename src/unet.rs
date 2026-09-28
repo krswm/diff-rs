@@ -8,9 +8,8 @@ use tenferro_cpu::CpuBackend;
 use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-use crate::loader::load_safetensors;
 use crate::model::{Fablock, Fconv, Fmodel, Frblock, Frcblock};
-use crate::util::{conv11, conv31, conv32, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, randn, self_attention, show, silu, upsample};
+use crate::util::{conv11, conv31, conv32, cross_attention, gelu, groupnorm, groupnorm_micro, layernorm, randn, self_attention, silu, upsample};
 
 fn calc_frblock(
     tensor: &TypedTensor<f32>,
@@ -26,7 +25,7 @@ fn calc_frblock(
     let tmp = silu(&tmp, backend)?;
     let tmp = conv31(&tmp, &frblock.wc1, &frblock.bc1, backend)?;
 
-    let timef = silu(&timef, backend)?;
+    let timef = silu(timef, backend)?;
     let timef = timef.reshape(&[1280, 1], backend)?;
     let b = frblock.b.reshape(&[num_c, 1], backend)?;
     let timef = frblock.w.matmul(&timef, backend)?.add(&b, backend)?;
@@ -49,13 +48,11 @@ fn calc_frcblock(
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [x, y, c, n]
 
-    let num_c = tensor.shape()[2];
-
     let tmp = groupnorm(tensor, &frcblock.g1, &frcblock.t1, 32, backend)?;
     let tmp = silu(&tmp, backend)?;
     let tmp = conv31(&tmp, &frcblock.wc1, &frcblock.bc1, backend)?;
 
-    let timef = silu(&timef, backend)?;
+    let timef = silu(timef, backend)?;
     let timef = timef.reshape(&[1280, 1], backend)?;
     let num = frcblock.b.shape()[0];
     let b = frcblock.b.reshape(&[num, 1], backend)?;
@@ -66,7 +63,7 @@ fn calc_frcblock(
     let tmp = silu(&tmp, backend)?;
     let tmp = conv31(&tmp, &frcblock.wc2, &frcblock.bc2, backend)?;
 
-    let tensor = conv11(&tensor, &frcblock.wc3, &frcblock.bc3, backend)?;
+    let tensor = conv11(tensor, &frcblock.wc3, &frcblock.bc3, backend)?;
     let tensor = tensor.add(&tmp, backend)?;
 
     Ok(tensor)
@@ -97,7 +94,7 @@ fn calc_fablock(
 
     let tmp2 = layernorm(&tmp, &fablock.g3, &fablock.t3, backend)?;
 
-    let tmp2 = cross_attention(&tmp2, &context, &fablock.w31q, &fablock.w31k, &fablock.w31v, &fablock.w32, &fablock.b32, 8, backend)?;
+    let tmp2 = cross_attention(&tmp2, context, &fablock.w31q, &fablock.w31k, &fablock.w31v, &fablock.w32, &fablock.b32, 8, backend)?;
 
     let tmp = tmp.add(&tmp2, backend)?;
 
@@ -176,7 +173,7 @@ fn calc_upsample(
     fconv: &Fconv,
     backend: &mut CpuBackend,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
-    let tensor = upsample(&tensor)?;
+    let tensor = upsample(tensor)?;
     let tensor = conv31(&tensor, &fconv.wc, &fconv.bc, backend)?;
     Ok(tensor)
 }
@@ -220,24 +217,24 @@ pub fn forward(
 
     print!("\r 0/45 fconv_i0\x1b[K");    stdout().flush()?; let tensor_i0  = conv31       (&tensor,     &fmodel.fconv_i0.wc, &fmodel.fconv_i0.bc, &mut backend)?;
     print!("\r 1/45 frblock_i1\x1b[K");  stdout().flush()?; let tensor     = calc_frblock (&tensor_i0,  &timef, &fmodel.frblock_i1, &mut backend)?;
-    print!("\r 2/45 fablock_i1\x1b[K");  stdout().flush()?; let tensor_i1  = calc_fablock (&tensor,     &context, &fmodel.fablock_i1, &mut backend)?;
+    print!("\r 2/45 fablock_i1\x1b[K");  stdout().flush()?; let tensor_i1  = calc_fablock (&tensor,     context, &fmodel.fablock_i1, &mut backend)?;
     print!("\r 3/45 frblock_i2\x1b[K");  stdout().flush()?; let tensor     = calc_frblock (&tensor_i1,  &timef, &fmodel.frblock_i2, &mut backend)?;
-    print!("\r 4/45 fablock_i2\x1b[K");  stdout().flush()?; let tensor_i2  = calc_fablock (&tensor,     &context, &fmodel.fablock_i2, &mut backend)?;
+    print!("\r 4/45 fablock_i2\x1b[K");  stdout().flush()?; let tensor_i2  = calc_fablock (&tensor,     context, &fmodel.fablock_i2, &mut backend)?;
     print!("\r 5/45 fconv_i3\x1b[K");    stdout().flush()?; let tensor_i3  = conv32       (&tensor_i2,  &fmodel.fconv_i3.wc, &fmodel.fconv_i3.bc, &mut backend)?;
     print!("\r 6/45 frcblock_i4\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor_i3,  &timef, &fmodel.frcblock_i4, &mut backend)?;
-    print!("\r 7/45 fablock_i4\x1b[K");  stdout().flush()?; let tensor_i4  = calc_fablock (&tensor,     &context, &fmodel.fablock_i4, &mut backend)?;
+    print!("\r 7/45 fablock_i4\x1b[K");  stdout().flush()?; let tensor_i4  = calc_fablock (&tensor,     context, &fmodel.fablock_i4, &mut backend)?;
     print!("\r 8/45 frblock_i5\x1b[K");  stdout().flush()?; let tensor     = calc_frblock (&tensor_i4,  &timef, &fmodel.frblock_i5, &mut backend)?;
-    print!("\r 9/45 fablock_i5\x1b[K");  stdout().flush()?; let tensor_i5  = calc_fablock (&tensor,     &context, &fmodel.fablock_i5, &mut backend)?;
+    print!("\r 9/45 fablock_i5\x1b[K");  stdout().flush()?; let tensor_i5  = calc_fablock (&tensor,     context, &fmodel.fablock_i5, &mut backend)?;
     print!("\r10/45 fconv_i6\x1b[K");    stdout().flush()?; let tensor_i6  = conv32       (&tensor_i5,  &fmodel.fconv_i6.wc, &fmodel.fconv_i6.bc, &mut backend)?;
     print!("\r11/45 frcblock_i7\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor_i6,  &timef, &fmodel.frcblock_i7, &mut backend)?;
-    print!("\r12/45 fablock_i7\x1b[K");  stdout().flush()?; let tensor_i7  = calc_fablock (&tensor,     &context, &fmodel.fablock_i7, &mut backend)?;
+    print!("\r12/45 fablock_i7\x1b[K");  stdout().flush()?; let tensor_i7  = calc_fablock (&tensor,     context, &fmodel.fablock_i7, &mut backend)?;
     print!("\r13/45 frblock_i8\x1b[K");  stdout().flush()?; let tensor     = calc_frblock (&tensor_i7,  &timef, &fmodel.frblock_i8, &mut backend)?;
-    print!("\r14/45 fablock_i8\x1b[K");  stdout().flush()?; let tensor_i8  = calc_fablock (&tensor,     &context, &fmodel.fablock_i8, &mut backend)?;
+    print!("\r14/45 fablock_i8\x1b[K");  stdout().flush()?; let tensor_i8  = calc_fablock (&tensor,     context, &fmodel.fablock_i8, &mut backend)?;
     print!("\r15/45 fconv_i9\x1b[K");    stdout().flush()?; let tensor_i9  = conv32       (&tensor_i8,  &fmodel.fconv_i9.wc, &fmodel.fconv_i9.bc, &mut backend)?;
     print!("\r16/45 frblock_i10\x1b[K"); stdout().flush()?; let tensor_i10 = calc_frblock (&tensor_i9,  &timef, &fmodel.frblock_i10, &mut backend)?;
     print!("\r17/45 frblock_i11\x1b[K"); stdout().flush()?; let tensor_i11 = calc_frblock (&tensor_i10, &timef, &fmodel.frblock_i11, &mut backend)?;
     print!("\r18/45 frblock_m0\x1b[K");  stdout().flush()?; let tensor     = calc_frblock (&tensor_i11, &timef, &fmodel.frblock_m0, &mut backend)?;
-    print!("\r19/45 fablock_m1\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_m1, &mut backend)?;
+    print!("\r19/45 fablock_m1\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_m1, &mut backend)?;
     print!("\r20/45 frblock_m2\x1b[K");  stdout().flush()?; let tensor     = calc_frblock (&tensor,     &timef, &fmodel.frblock_m2, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i11, &mut backend)?;
     print!("\r21/45 frcblock_o0\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o0, &mut backend)?;
@@ -248,34 +245,34 @@ pub fn forward(
     print!("\r24/45 fconv_o2\x1b[K");    stdout().flush()?; let tensor     = calc_upsample(&tensor,     &fmodel.fconv_o2, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i8, &mut backend)?;
     print!("\r25/45 frcblock_o3\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o3, &mut backend)?;
-    print!("\r26/45 fablock_o3\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o3, &mut backend)?;
+    print!("\r26/45 fablock_o3\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o3, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i7, &mut backend)?;
     print!("\r27/45 frcblock_o4\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o4, &mut backend)?;
-    print!("\r28/45 fablock_o4\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o4, &mut backend)?;
+    print!("\r28/45 fablock_o4\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o4, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i6, &mut backend)?;
     print!("\r29/45 frcblock_o5\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o5, &mut backend)?;
-    print!("\r30/45 fablock_o5\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o5, &mut backend)?;
+    print!("\r30/45 fablock_o5\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o5, &mut backend)?;
     print!("\r31/45 fconv_o5\x1b[K");    stdout().flush()?; let tensor     = calc_upsample(&tensor,     &fmodel.fconv_o5, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i5, &mut backend)?;
     print!("\r32/45 frcblock_o6\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o6, &mut backend)?;
-    print!("\r33/45 fablock_o6\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o6, &mut backend)?;
+    print!("\r33/45 fablock_o6\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o6, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i4, &mut backend)?;
     print!("\r34/45 frcblock_o7\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o7, &mut backend)?;
-    print!("\r35/45 fablock_o7\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o7, &mut backend)?;
+    print!("\r35/45 fablock_o7\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o7, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i3, &mut backend)?;
     print!("\r36/45 frcblock_o8\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o8, &mut backend)?;
-    print!("\r37/45 fablock_o8\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o8, &mut backend)?;
+    print!("\r37/45 fablock_o8\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o8, &mut backend)?;
     print!("\r38/45 fconv_o8\x1b[K");    stdout().flush()?; let tensor     = calc_upsample(&tensor,     &fmodel.fconv_o8, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i2, &mut backend)?;
     print!("\r39/45 frcblock_o9\x1b[K"); stdout().flush()?; let tensor     = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o9, &mut backend)?;
-    print!("\r40/45 fablock_o9\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     &context, &fmodel.fablock_o9, &mut backend)?;
+    print!("\r40/45 fablock_o9\x1b[K");  stdout().flush()?; let tensor     = calc_fablock (&tensor,     context, &fmodel.fablock_o9, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i1, &mut backend)?;
     print!("\r41/45 frcblock_o10\x1b[K"); stdout().flush()?; let tensor    = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o10, &mut backend)?;
-    print!("\r42/45 fablock_o10\x1b[K");  stdout().flush()?; let tensor    = calc_fablock (&tensor,     &context, &fmodel.fablock_o10, &mut backend)?;
+    print!("\r42/45 fablock_o10\x1b[K");  stdout().flush()?; let tensor    = calc_fablock (&tensor,     context, &fmodel.fablock_o10, &mut backend)?;
     let tensor = cat(&tensor, &tensor_i0, &mut backend)?;
     print!("\r43/45 frcblock_o11\x1b[K"); stdout().flush()?; let tensor    = calc_frcblock(&tensor,     &timef, &fmodel.frcblock_o11, &mut backend)?;
-    print!("\r44/45 fablock_o11\x1b[K");  stdout().flush()?; let tensor    = calc_fablock (&tensor,     &context, &fmodel.fablock_o11, &mut backend)?;
-    print!("\r\x1b[K"); stdout().flush();
+    print!("\r44/45 fablock_o11\x1b[K");  stdout().flush()?; let tensor    = calc_fablock (&tensor,     context, &fmodel.fablock_o11, &mut backend)?;
+    print!("\r\x1b[K"); stdout().flush()?;
 
     let tensor = groupnorm(&tensor, &fmodel.g_final, &fmodel.t_final, 32, &mut backend)?;
     let tensor = silu(&tensor, &mut backend)?;
@@ -284,7 +281,6 @@ pub fn forward(
     let num_x = tensor.shape()[0];
     let num_y = tensor.shape()[1];
     let num_c = tensor.shape()[2];
-    let num_n = tensor.shape()[3];
     let mut chunks = tensor.host_data()?.chunks(num_x * num_y * num_c);
     let tensor_positive = TypedTensor::<f32>::from_vec_col_major(
         vec![num_x, num_y, num_c, 1],

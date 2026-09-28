@@ -26,7 +26,6 @@
 
 use std::error::Error;
 
-use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
 use rand_distr::{Distribution, Normal};
 use tenferro_cpu::CpuBackend;
@@ -444,8 +443,6 @@ pub fn softmax(
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [X, Y, x, y, n, h]
 
-    let num_X = tensor.shape()[0];
-    let num_Y = tensor.shape()[1];
     let num_x = tensor.shape()[2];
     let num_y = tensor.shape()[3];
     let num_n = tensor.shape()[4];
@@ -464,7 +461,7 @@ pub fn softmax(
     let numerator = tensor.sub(&maximum, backend)?.exp(backend)?; // [X, Y, x, y, n, h]
     let denominator = numerator
         .reduce_sum(&[0, 1], backend)?
-        .reshape(&[1, 1, num_X, num_Y, num_n, num_h], backend)?; // [1, 1, x, y, n, h]
+        .reshape(&[1, 1, num_x, num_y, num_n, num_h], backend)?; // [1, 1, x, y, n, h]
 
     let tensor = numerator.div(&denominator, backend)?; // [X, Y, x, y, n, h]
 
@@ -819,13 +816,14 @@ pub fn self_attention(
         .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [x, y, C, n]
 
     let out_bias = out_bias.reshape(&[1, 1, num_c, 1], backend)?;
-    let tensor = [&out_weight, &tensor]
+    let tensor = [out_weight, &tensor]
         .einsum("cC,xyCn->xycn", backend)? // [x, y, c, n]
         .add(&out_bias, backend)?; // [x, y, c, n]
 
     Ok(tensor)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn cross_attention(
     tensor_1: &TypedTensor<f32>,
     tensor_2: &TypedTensor<f32>,
@@ -912,7 +910,7 @@ pub fn cross_attention(
         .reshape(&[num_x, num_y, num_c, num_n], backend)?; // [i, h, C, n]
 
     let out_bias = out_bias.reshape(&[1, 1, num_c, 1], backend)?;
-    let tensor = [&out_weight, &tensor]
+    let tensor = [out_weight, &tensor]
         .einsum("cC,xyCn->xycn", backend)? // [x, y, c, n]
         .add(&out_bias, backend)?; // [x, y, c, n]
 

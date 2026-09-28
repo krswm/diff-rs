@@ -222,8 +222,6 @@ pub fn get_model(
     Ok(model)
 }
 
-////
-
 // The model safetensor file seems to be constructed with
 // row-major engine (PyTorch etc.) in mind
 // (rightmost index varies the most, batch index is on the left).
