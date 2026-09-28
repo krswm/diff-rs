@@ -30,8 +30,10 @@ cd diff-rs
 
 ```
 mkdir model
-curl --output model/model.safetensors 'https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/v1-5-pruned.safetensors'
-curl --output-dir model --remote-name 'https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/{config.json,vocab.json,merges.txt}'
+curl https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/reslove/main/v1-5-pruned.safetensors --output model/model.safetensors
+curl https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/tokenizer/vocab.json --output model/vocab.json
+curl https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/tokenizer/merges.txt --output model/merges.txt
+curl https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/text_encoder/config.json --output model/config.json
 ```
 
 **Compile the Rust code.**
@@ -57,7 +59,7 @@ It may take some minutes to finish inference.
 
 The AI-generated image is saved to the path on the second parameter (`output.ppm` here).
 It is a PPM image format file.
-As far as I know, at least macOS’s Preview supports the format.
+macOS’s Preview supports the format.
 You can convert it to another format using an external program.
 For instance, you can convert a PPM image to a PNG image with ImageMagick:
 
@@ -90,5 +92,5 @@ I am looking forward to implement something scientific based on this project in 
 This is a hobby project of mine I started from scratch.
 I enjoyed a lot by working on this project!
 
-I used [the model weight of Stable Diffusion](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and [a reference implementation *pytorch-stable-diffusion*](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) only for the purpose to observe their behavior as diffusion model.
+I used [the model weight of Stable Diffusion](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and [a reference implementation (*pytorch-stable-diffusion*)](https://github.com/hkproj/pytorch-stable-diffusion) only for the purpose to observe their behavior as diffusion model architecture.
 Except for that, I did **not** use generative AI for this project at all.
