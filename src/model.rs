@@ -1,4 +1,4 @@
-// GPT-2 Inference with tenferro
+// Stable Diffusion Inference with tenferro
 // Copyright (C) 2026  Kurosawa Mutsumi
 //
 // This program is free software: you can redistribute it and/or modify
