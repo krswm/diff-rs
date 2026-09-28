@@ -35,17 +35,63 @@ pub mod transformer;
 pub mod unet;
 pub mod util;
 
+fn get_prompt_embedding(
+    token_to_id: &HashMap<String, usize>,
+    ranks: &HashMap<(String, String), u32>,
+    model: &crate::model::Model,
+    prompt: &str,
+) -> Result<TypedTensor<f32>, Box<dyn Error>> {
+    let mut backend = CpuBackend::new();
+    
+    // ==== Tokenization ====
+
+    // Token IDs
+    let ids = tokenizer::tokenize(token_to_id, ranks, model, prompt)?;
+
+    // ==== Inference ====
+
+    let mut k_colmaj_caches = vec![Vec::<f32>::new(); model.n_layer];
+    let mut v_colmaj_caches = vec![Vec::<f32>::new(); model.n_layer];
+
+    let x = {
+        let mut colmaj = Vec::with_capacity(model.n_embd * model.n_ctx);
+        for (pos, id) in ids.iter().enumerate() {
+            let output = transformer::transformer(
+                *id,
+                pos,
+                &model,
+                &mut k_colmaj_caches,
+                &mut v_colmaj_caches,
+                &mut backend,
+            )?;
+            colmaj.extend_from_slice(output.host_data()?);
+        }
+        TypedTensor::<f32>::from_vec_col_major(vec![model.n_embd, model.n_ctx], colmaj)?
+    };
+    // TODO: CLIP isn't a text generation model,
+    // maybe KV-cache isn't effective at all here?
+
+    Ok(x)
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
-        println!("GPT-2 Inference with tenferro");
+    if args.len() != 5 {
+        println!("Stable Diffusion Inference with tenferro");
         println!(
-            "Usage: \x1b[1m{} <path to model repository> <your prompt>\x1b[22m",
+            "Usage: \x1b[1m{} <path to model repository> <output path> <your positive prompt> <your negative prompt>\x1b[22m",
             &args[0]
         );
+        println!("The AI-generated image will be saved to <output path>.");
+        println!("The image will be what <positive prompt> describes.");
+        println!("The image will not be what <negative prompt> describes.");
+        println!("You can leave <negative prompt> empty: ''");
+        println!("You may have to enclose 'the prompts' with quotes.");
         println!("You may have to enclose 'your prompt' with quotes.");
         return Ok(());
     }
+
+    let performance_timer = Instant::now();
 
     println!("==== CLIP: Obtaining Context Tensor from Your Prompt... ====");
 
@@ -91,34 +137,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         model::get_model(tensors, config)?
     };
 
-    // ==== Tokenization ====
+    let positive_x = get_prompt_embedding(&token_to_id, &ranks, &model, &args[3])?;
+    let negative_x = get_prompt_embedding(&token_to_id, &ranks, &model, &args[4])?;
 
-    // Token IDs
-    let ids = tokenizer::tokenize(&token_to_id, &ranks, &model, &args[2])?;
-
-    // ==== Inference ====
-
-    let mut k_colmaj_caches = vec![Vec::<f32>::new(); model.n_layer];
-    let mut v_colmaj_caches = vec![Vec::<f32>::new(); model.n_layer];
-    let mut backend = CpuBackend::new();
 
     let x = {
-        // I can utilize tenferro using col-major!
-        // Adding a new column on the right is
-        // equivalent to extending to colmaj.
-        let mut colmaj = Vec::with_capacity(model.n_embd * model.n_ctx);
-        for (pos, id) in ids.iter().enumerate() {
-            let output = transformer::transformer(
-                *id,
-                pos,
-                &model,
-                &mut k_colmaj_caches,
-                &mut v_colmaj_caches,
-                &mut backend,
-            )?;
-            colmaj.extend_from_slice(output.host_data()?);
-        }
-        TypedTensor::<f32>::from_vec_col_major(vec![model.n_embd, model.n_ctx], colmaj)?
+        let mut colmaj = Vec::new();
+        colmaj.extend_from_slice(positive_x.host_data()?);
+        colmaj.extend_from_slice(negative_x.host_data()?);
+        TypedTensor::<f32>::from_vec_col_major(vec![model.n_embd, model.n_ctx, 2], colmaj)?
     };
 
     ////////
@@ -159,11 +186,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("==== Decoding Process ====");
 
     let tensor = decoder::decode(&tensor, dmodel)?;
-    util::show(&tensor)?;
     saver::save_as_netppm_image(&tensor, &args[2]);
 
     println!("==== Process Finished ====");
     println!("AI-Generated image saved at {} (PPM image format)", &args[2]);
+
+    let performance_time = performance_timer.elapsed().as_secs_f64();
+    println!("time taken: {performance_time} s");
     
     Ok(())
 }

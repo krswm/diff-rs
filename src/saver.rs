@@ -7,14 +7,10 @@ use std::io::Write;
 use tenferro_cpu::CpuBackend;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
-use crate::util::show;
-
 pub fn save_as_netppm_image(tensor: &TypedTensor<f32>, path: &str) -> Result<(), Box<dyn Error>> {
     // tensor [x, y, r, n]
     //
     // r: R, G, or B?
-    
-    show(&tensor)?;
 
     let num_x = tensor.shape()[0];
     let num_y = tensor.shape()[1];
