@@ -6,6 +6,10 @@ Stable Diffusion is a machine learning model that is trained to generate images 
 
 It is built on [tenferro](https://github.com/tensor4all/tenferro-rs), a Rust-native tensor library.
 
+[Demo](https://raw.githubusercontent.com/krswm/asset/diff-rs/output.png)
+
+Figure: An image the engine generated with prompt “a cat with a hat”
+
 I also built:
 
 - [An inference engine for Stable Diffusion in Julia](https://github.com/krswm/diff-jl)
