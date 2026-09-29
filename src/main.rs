@@ -123,18 +123,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         ranks
     };
 
+    let tensors = {
+        let path = &format!("{}/model.safetensors", &args[1]);
+        loader::load_safetensors(path)?
+    };
+
     let model = {
-        let tensors = {
-            let path = &format!("{}/model.safetensors", &args[1]);
-            loader::load_safetensors(path)?
-        };
         let config: HashMap<String, Value> = {
             let path = &format!("{}/config.json", &args[1]);
             let file = File::open(path)?;
             let reader = BufReader::new(file);
             serde_json::from_reader(reader)?
         };
-        model::get_model(tensors, config)?
+        model::get_model(&tensors, config)?
     };
 
     let positive_x = get_prompt_embedding(&token_to_id, &ranks, &model, &args[3])?;
@@ -150,21 +151,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     ////////
 
-    let fmodel = {
-        let tensors = {
-            let path = &format!("{}/model.safetensors", &args[1]);
-            loader::load_safetensors(path)?
-        };
-        model::get_fmodel(tensors)?
-    };
+    let fmodel = model::get_fmodel(&tensors)?;
 
-    let dmodel = {
-        let tensors = {
-            let path = &format!("{}/model.safetensors", &args[1]);
-            loader::load_safetensors(path)?
-        };
-        model::get_dmodel(tensors)?
-    };
+    let dmodel = model::get_dmodel(&tensors)?;
 
     println!("==== U-Net: Diffusion Process ====");
     println!("\"t = 0\" is the last one.");

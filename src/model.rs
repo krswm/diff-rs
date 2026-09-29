@@ -64,7 +64,7 @@ fn validate_shape(tensor: &TypedTensor<f32>, expected: [usize; 2]) -> Result<(),
 }
 
 pub fn get_model(
-    tensors: HashMap<String, TypedTensor<f32>>,
+    tensors: &HashMap<String, TypedTensor<f32>>,
     config: HashMap<String, Value>,
 ) -> Result<Model, Box<dyn Error>> {
     let n_ctx = config["max_position_embeddings"].as_u64().unwrap() as usize;
@@ -418,36 +418,36 @@ pub struct Dmodel {
     pub dconv_out: Dconv,
 }
 
-pub fn get_dmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Dmodel, Box<dyn Error>> {
-    let dconv_pq = get_dconv(&tensors, "first_stage_model.post_quant_conv")?;
-    let dconv_in = get_dconv(&tensors, "first_stage_model.decoder.conv_in")?;
+pub fn get_dmodel(tensors: &HashMap<String, TypedTensor<f32>>) -> Result<Dmodel, Box<dyn Error>> {
+    let dconv_pq = get_dconv(tensors, "first_stage_model.post_quant_conv")?;
+    let dconv_in = get_dconv(tensors, "first_stage_model.decoder.conv_in")?;
 
-    let drblock_mid1 = get_drblock(&tensors, "first_stage_model.decoder.mid.block_1")?;
-    let dablock = get_dablock(&tensors, "first_stage_model.decoder.mid.attn_1")?;
-    let drblock_mid2 = get_drblock(&tensors, "first_stage_model.decoder.mid.block_2")?;
+    let drblock_mid1 = get_drblock(tensors, "first_stage_model.decoder.mid.block_1")?;
+    let dablock = get_dablock(tensors, "first_stage_model.decoder.mid.attn_1")?;
+    let drblock_mid2 = get_drblock(tensors, "first_stage_model.decoder.mid.block_2")?;
 
-    let drblock_30 = get_drblock(&tensors, "first_stage_model.decoder.up.3.block.0")?;
-    let drblock_31 = get_drblock(&tensors, "first_stage_model.decoder.up.3.block.1")?;
-    let drblock_32 = get_drblock(&tensors, "first_stage_model.decoder.up.3.block.2")?;
-    let dconv_3 = get_dconv(&tensors, "first_stage_model.decoder.up.3.upsample.conv")?;
+    let drblock_30 = get_drblock(tensors, "first_stage_model.decoder.up.3.block.0")?;
+    let drblock_31 = get_drblock(tensors, "first_stage_model.decoder.up.3.block.1")?;
+    let drblock_32 = get_drblock(tensors, "first_stage_model.decoder.up.3.block.2")?;
+    let dconv_3 = get_dconv(tensors, "first_stage_model.decoder.up.3.upsample.conv")?;
 
-    let drblock_20 = get_drblock(&tensors, "first_stage_model.decoder.up.2.block.0")?;
-    let drblock_21 = get_drblock(&tensors, "first_stage_model.decoder.up.2.block.1")?;
-    let drblock_22 = get_drblock(&tensors, "first_stage_model.decoder.up.2.block.2")?;
-    let dconv_2 = get_dconv(&tensors, "first_stage_model.decoder.up.2.upsample.conv")?;
+    let drblock_20 = get_drblock(tensors, "first_stage_model.decoder.up.2.block.0")?;
+    let drblock_21 = get_drblock(tensors, "first_stage_model.decoder.up.2.block.1")?;
+    let drblock_22 = get_drblock(tensors, "first_stage_model.decoder.up.2.block.2")?;
+    let dconv_2 = get_dconv(tensors, "first_stage_model.decoder.up.2.upsample.conv")?;
 
-    let drcblock_10 = get_drcblock(&tensors, "first_stage_model.decoder.up.1.block.0")?;
-    let drblock_11 = get_drblock(&tensors, "first_stage_model.decoder.up.1.block.1")?;
-    let drblock_12 = get_drblock(&tensors, "first_stage_model.decoder.up.1.block.2")?;
-    let dconv_1 = get_dconv(&tensors, "first_stage_model.decoder.up.1.upsample.conv")?;
+    let drcblock_10 = get_drcblock(tensors, "first_stage_model.decoder.up.1.block.0")?;
+    let drblock_11 = get_drblock(tensors, "first_stage_model.decoder.up.1.block.1")?;
+    let drblock_12 = get_drblock(tensors, "first_stage_model.decoder.up.1.block.2")?;
+    let dconv_1 = get_dconv(tensors, "first_stage_model.decoder.up.1.upsample.conv")?;
 
-    let drcblock_00 = get_drcblock(&tensors, "first_stage_model.decoder.up.0.block.0")?;
-    let drblock_01 = get_drblock(&tensors, "first_stage_model.decoder.up.0.block.1")?;
-    let drblock_02 = get_drblock(&tensors, "first_stage_model.decoder.up.0.block.2")?;
+    let drcblock_00 = get_drcblock(tensors, "first_stage_model.decoder.up.0.block.0")?;
+    let drblock_01 = get_drblock(tensors, "first_stage_model.decoder.up.0.block.1")?;
+    let drblock_02 = get_drblock(tensors, "first_stage_model.decoder.up.0.block.2")?;
 
     let g = tensors["first_stage_model.decoder.norm_out.weight"].duplicate()?;
     let t = tensors["first_stage_model.decoder.norm_out.bias"].duplicate()?;
-    let dconv_out = get_dconv(&tensors, "first_stage_model.decoder.conv_out")?;
+    let dconv_out = get_dconv(tensors, "first_stage_model.decoder.conv_out")?;
 
     let x = Dmodel {
         dconv_pq,
@@ -725,7 +725,7 @@ pub struct Fmodel {
     pub bc_final: TypedTensor<f32>,
 }
 
-pub fn get_fmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Fmodel, Box<dyn Error>> {
+pub fn get_fmodel(tensors: &HashMap<String, TypedTensor<f32>>) -> Result<Fmodel, Box<dyn Error>> {
     let mut backend = CpuBackend::new();
 
     let time_w1 = tensors["model.diffusion_model.time_embed.0.weight"].duplicate()?;
@@ -733,54 +733,54 @@ pub fn get_fmodel(tensors: HashMap<String, TypedTensor<f32>>) -> Result<Fmodel, 
     let time_w2 = tensors["model.diffusion_model.time_embed.2.weight"].duplicate()?;
     let time_b2 = tensors["model.diffusion_model.time_embed.2.bias"].duplicate()?;
 
-    let fconv_i0 = get_fconv(&tensors, "model.diffusion_model.input_blocks.0.0")?;
-    let fconv_i3 = get_fconv(&tensors, "model.diffusion_model.input_blocks.3.0.op")?;
-    let fconv_i6 = get_fconv(&tensors, "model.diffusion_model.input_blocks.6.0.op")?;
-    let fconv_i9 = get_fconv(&tensors, "model.diffusion_model.input_blocks.9.0.op")?;
-    let fconv_o2 = get_fconv(&tensors, "model.diffusion_model.output_blocks.2.1.conv")?;
-    let fconv_o5 = get_fconv(&tensors, "model.diffusion_model.output_blocks.5.2.conv")?;
-    let fconv_o8 = get_fconv(&tensors, "model.diffusion_model.output_blocks.8.2.conv")?;
+    let fconv_i0 = get_fconv(tensors, "model.diffusion_model.input_blocks.0.0")?;
+    let fconv_i3 = get_fconv(tensors, "model.diffusion_model.input_blocks.3.0.op")?;
+    let fconv_i6 = get_fconv(tensors, "model.diffusion_model.input_blocks.6.0.op")?;
+    let fconv_i9 = get_fconv(tensors, "model.diffusion_model.input_blocks.9.0.op")?;
+    let fconv_o2 = get_fconv(tensors, "model.diffusion_model.output_blocks.2.1.conv")?;
+    let fconv_o5 = get_fconv(tensors, "model.diffusion_model.output_blocks.5.2.conv")?;
+    let fconv_o8 = get_fconv(tensors, "model.diffusion_model.output_blocks.8.2.conv")?;
 
-    let frblock_i1  = get_frblock(&tensors, "model.diffusion_model.input_blocks.1.0")?;
-    let frblock_i2  = get_frblock(&tensors, "model.diffusion_model.input_blocks.2.0")?;
-    let frblock_i5  = get_frblock(&tensors, "model.diffusion_model.input_blocks.5.0")?;
-    let frblock_i8  = get_frblock(&tensors, "model.diffusion_model.input_blocks.8.0")?;
-    let frblock_i10 = get_frblock(&tensors, "model.diffusion_model.input_blocks.10.0")?;
-    let frblock_i11 = get_frblock(&tensors, "model.diffusion_model.input_blocks.11.0")?;
-    let frblock_m0  = get_frblock(&tensors, "model.diffusion_model.middle_block.0")?;
-    let frblock_m2  = get_frblock(&tensors, "model.diffusion_model.middle_block.2")?;
+    let frblock_i1  = get_frblock(tensors, "model.diffusion_model.input_blocks.1.0")?;
+    let frblock_i2  = get_frblock(tensors, "model.diffusion_model.input_blocks.2.0")?;
+    let frblock_i5  = get_frblock(tensors, "model.diffusion_model.input_blocks.5.0")?;
+    let frblock_i8  = get_frblock(tensors, "model.diffusion_model.input_blocks.8.0")?;
+    let frblock_i10 = get_frblock(tensors, "model.diffusion_model.input_blocks.10.0")?;
+    let frblock_i11 = get_frblock(tensors, "model.diffusion_model.input_blocks.11.0")?;
+    let frblock_m0  = get_frblock(tensors, "model.diffusion_model.middle_block.0")?;
+    let frblock_m2  = get_frblock(tensors, "model.diffusion_model.middle_block.2")?;
 
-    let frcblock_i4  = get_frcblock(&tensors, "model.diffusion_model.input_blocks.4.0")?;
-    let frcblock_i7  = get_frcblock(&tensors, "model.diffusion_model.input_blocks.7.0")?;
-    let frcblock_o0  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.0.0")?;
-    let frcblock_o1  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.1.0")?;
-    let frcblock_o2  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.2.0")?;
-    let frcblock_o3  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.3.0")?;
-    let frcblock_o4  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.4.0")?;
-    let frcblock_o5  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.5.0")?;
-    let frcblock_o6  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.6.0")?;
-    let frcblock_o7  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.7.0")?;
-    let frcblock_o8  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.8.0")?;
-    let frcblock_o9  = get_frcblock(&tensors, "model.diffusion_model.output_blocks.9.0")?;
-    let frcblock_o10 = get_frcblock(&tensors, "model.diffusion_model.output_blocks.10.0")?;
-    let frcblock_o11 = get_frcblock(&tensors, "model.diffusion_model.output_blocks.11.0")?;
+    let frcblock_i4  = get_frcblock(tensors, "model.diffusion_model.input_blocks.4.0")?;
+    let frcblock_i7  = get_frcblock(tensors, "model.diffusion_model.input_blocks.7.0")?;
+    let frcblock_o0  = get_frcblock(tensors, "model.diffusion_model.output_blocks.0.0")?;
+    let frcblock_o1  = get_frcblock(tensors, "model.diffusion_model.output_blocks.1.0")?;
+    let frcblock_o2  = get_frcblock(tensors, "model.diffusion_model.output_blocks.2.0")?;
+    let frcblock_o3  = get_frcblock(tensors, "model.diffusion_model.output_blocks.3.0")?;
+    let frcblock_o4  = get_frcblock(tensors, "model.diffusion_model.output_blocks.4.0")?;
+    let frcblock_o5  = get_frcblock(tensors, "model.diffusion_model.output_blocks.5.0")?;
+    let frcblock_o6  = get_frcblock(tensors, "model.diffusion_model.output_blocks.6.0")?;
+    let frcblock_o7  = get_frcblock(tensors, "model.diffusion_model.output_blocks.7.0")?;
+    let frcblock_o8  = get_frcblock(tensors, "model.diffusion_model.output_blocks.8.0")?;
+    let frcblock_o9  = get_frcblock(tensors, "model.diffusion_model.output_blocks.9.0")?;
+    let frcblock_o10 = get_frcblock(tensors, "model.diffusion_model.output_blocks.10.0")?;
+    let frcblock_o11 = get_frcblock(tensors, "model.diffusion_model.output_blocks.11.0")?;
 
-    let fablock_i1  = get_fablock(&tensors, "model.diffusion_model.input_blocks.1.1")?;
-    let fablock_i2  = get_fablock(&tensors, "model.diffusion_model.input_blocks.2.1")?;
-    let fablock_i4  = get_fablock(&tensors, "model.diffusion_model.input_blocks.4.1")?;
-    let fablock_i5  = get_fablock(&tensors, "model.diffusion_model.input_blocks.5.1")?;
-    let fablock_i7  = get_fablock(&tensors, "model.diffusion_model.input_blocks.7.1")?;
-    let fablock_i8  = get_fablock(&tensors, "model.diffusion_model.input_blocks.8.1")?;
-    let fablock_m1  = get_fablock(&tensors, "model.diffusion_model.middle_block.1")?;
-    let fablock_o3  = get_fablock(&tensors, "model.diffusion_model.output_blocks.3.1")?;
-    let fablock_o4  = get_fablock(&tensors, "model.diffusion_model.output_blocks.4.1")?;
-    let fablock_o5  = get_fablock(&tensors, "model.diffusion_model.output_blocks.5.1")?;
-    let fablock_o6  = get_fablock(&tensors, "model.diffusion_model.output_blocks.6.1")?;
-    let fablock_o7  = get_fablock(&tensors, "model.diffusion_model.output_blocks.7.1")?;
-    let fablock_o8  = get_fablock(&tensors, "model.diffusion_model.output_blocks.8.1")?;
-    let fablock_o9  = get_fablock(&tensors, "model.diffusion_model.output_blocks.9.1")?;
-    let fablock_o10 = get_fablock(&tensors, "model.diffusion_model.output_blocks.10.1")?;
-    let fablock_o11 = get_fablock(&tensors, "model.diffusion_model.output_blocks.11.1")?;
+    let fablock_i1  = get_fablock(tensors, "model.diffusion_model.input_blocks.1.1")?;
+    let fablock_i2  = get_fablock(tensors, "model.diffusion_model.input_blocks.2.1")?;
+    let fablock_i4  = get_fablock(tensors, "model.diffusion_model.input_blocks.4.1")?;
+    let fablock_i5  = get_fablock(tensors, "model.diffusion_model.input_blocks.5.1")?;
+    let fablock_i7  = get_fablock(tensors, "model.diffusion_model.input_blocks.7.1")?;
+    let fablock_i8  = get_fablock(tensors, "model.diffusion_model.input_blocks.8.1")?;
+    let fablock_m1  = get_fablock(tensors, "model.diffusion_model.middle_block.1")?;
+    let fablock_o3  = get_fablock(tensors, "model.diffusion_model.output_blocks.3.1")?;
+    let fablock_o4  = get_fablock(tensors, "model.diffusion_model.output_blocks.4.1")?;
+    let fablock_o5  = get_fablock(tensors, "model.diffusion_model.output_blocks.5.1")?;
+    let fablock_o6  = get_fablock(tensors, "model.diffusion_model.output_blocks.6.1")?;
+    let fablock_o7  = get_fablock(tensors, "model.diffusion_model.output_blocks.7.1")?;
+    let fablock_o8  = get_fablock(tensors, "model.diffusion_model.output_blocks.8.1")?;
+    let fablock_o9  = get_fablock(tensors, "model.diffusion_model.output_blocks.9.1")?;
+    let fablock_o10 = get_fablock(tensors, "model.diffusion_model.output_blocks.10.1")?;
+    let fablock_o11 = get_fablock(tensors, "model.diffusion_model.output_blocks.11.1")?;
 
     let g_final  = tensors["model.diffusion_model.out.0.weight"].duplicate()?;
     let t_final  = tensors["model.diffusion_model.out.0.bias"].duplicate()?;
