@@ -44,7 +44,7 @@ use std::error::Error;
 
 use rand::rngs::ChaCha20Rng;
 use rand_distr::{Distribution, Normal};
-use tenferro_cpu::CpuBackend;
+use tenferro_cpu::CpuEngine;
 use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
@@ -418,7 +418,7 @@ pub fn randn(shape: Vec<usize>, rng: &mut ChaCha20Rng) -> Result<TypedTensor<f32
 
 pub fn silu(
     tensor: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     let one = TypedTensor::<f32>::from_vec_col_major(vec![], vec![1.0])?;
     let denominator = tensor.neg(backend)?.exp(backend)?.add(&one, backend)?;
@@ -428,7 +428,7 @@ pub fn silu(
 
 pub fn gelu(
     tensor: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // This formula is based on the paper that introduced GELU.
     // https://arxiv.org/abs/1606.08415
@@ -455,7 +455,7 @@ pub fn gelu(
 
 pub fn softmax(
     tensor: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [X, Y, x, y, n, h]
 
@@ -476,7 +476,7 @@ pub fn softmax(
 
     let numerator = tensor.sub(&maximum, backend)?.exp(backend)?; // [X, Y, x, y, n, h]
     let denominator = numerator
-        .reduce_sum(&[0, 1], backend)?
+        .reduce_sum(Some(&[0, 1]), backend)?
         .reshape(&[1, 1, num_x, num_y, num_n, num_h], backend)?; // [1, 1, x, y, n, h]
 
     let tensor = numerator.div(&denominator, backend)?; // [X, Y, x, y, n, h]
@@ -488,7 +488,7 @@ pub fn layernorm(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [x, y, c, n]
     // weight [c]
@@ -506,7 +506,7 @@ pub fn layernorm(
     // mean(tensor, dims = 3)
     // ∑ x / count
     let tensor_mean = tensor
-        .reduce_sum(&[2], backend)?
+        .reduce_sum(Some(&[2]), backend)?
         .div(&count, backend)?
         .reshape(&[num_x, num_y, 1, num_n], backend)?; // [x, y, 1, n]
 
@@ -517,7 +517,7 @@ pub fn layernorm(
     // ∑ (x - ⟨x⟩)² / count
     let tensor_var = tensor_residual
         .mul(&tensor_residual, backend)?
-        .reduce_sum(&[2], backend)?
+        .reduce_sum(Some(&[2]), backend)?
         .div(&count, backend)?
         .reshape(&[num_x, num_y, 1, num_n], backend)?; // [x, y, 1, n]
 
@@ -538,7 +538,7 @@ pub fn groupnorm_general(
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     num_g: usize, // Number of groups
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
     epsilon: f32,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // tensor [x, y, c, n]
@@ -561,7 +561,7 @@ pub fn groupnorm_general(
     // mean(tensor, dims = 3)
     // ∑ x / count
     let tensor_mean = tensor // [x, y, i, g, n]
-        .reduce_sum(&[0, 1, 2], backend)? // [1, 1, g, n] // Notice this differs from layernorm as well!
+        .reduce_sum(Some(&[0, 1, 2]), backend)? // [1, 1, g, n] // Notice this differs from layernorm as well!
         .div(&count, backend)? // [1, 1, g, n]
         .reshape(&[1, 1, 1, num_g, num_n], backend)?; // [1, 1, 1, g, n]
 
@@ -572,7 +572,7 @@ pub fn groupnorm_general(
     // ∑ (x - ⟨x⟩)² / count
     let tensor_var = tensor_residual // [x, y, i, g, n]
         .mul(&tensor_residual, backend)? // [x, y, i, g, n]
-        .reduce_sum(&[0, 1, 2], backend)? // [1, 1, g, n]
+        .reduce_sum(Some(&[0, 1, 2]), backend)? // [1, 1, g, n]
         .div(&count, backend)? // [1, 1, g, n]
         .reshape(&[1, 1, 1, num_g, num_n], backend)?; // [1, 1, 1, g, n]
 
@@ -594,16 +594,9 @@ pub fn groupnorm(
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     num_g: usize, // Number of groups
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
-    let x = groupnorm_general(
-        tensor,
-        weight,
-        bias,
-        num_g,
-        backend,
-        1.0e-5,
-    )?;
+    let x = groupnorm_general(tensor, weight, bias, num_g, backend, 1.0e-5)?;
     Ok(x)
 }
 
@@ -612,15 +605,10 @@ pub fn groupnorm_micro(
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     num_g: usize, // Number of groups
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     let x = groupnorm_general(
-        tensor,
-        weight,
-        bias,
-        num_g,
-        backend,
-        1.0e-6, // <- the only difference from above
+        tensor, weight, bias, num_g, backend, 1.0e-6, // <- the only difference from above
     )?;
     Ok(x)
 }
@@ -630,7 +618,7 @@ pub fn conv(
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
     stride: usize,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     let num_xi = weight.shape()[0];
     let num_eta = weight.shape()[1];
@@ -666,7 +654,9 @@ pub fn conv(
                                 let y = stride * b;
                                 let xx = x + xi - pad;
                                 let yy = y + eta - pad;
-                                let value = if /* xx >= 0 && */ xx < num_x && /* yy >= 0 && */ yy < num_y {
+                                let value = if
+                                /* xx >= 0 && */
+                                xx < num_x && /* yy >= 0 && */ yy < num_y {
                                     *tensor.get(&[xx, yy, i, n])?
                                 } else {
                                     0.0f32
@@ -695,7 +685,7 @@ pub fn conv11(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // "conv" -> 2D convolution
     // "1" -> kernel size: 1x1 (padding: 0)
@@ -711,7 +701,7 @@ pub fn conv31(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // "conv" -> 2D convolution
     // "3" -> kernel size: 3x3 (padding: 1)
@@ -727,7 +717,7 @@ pub fn conv32(
     tensor: &TypedTensor<f32>,
     weight: &TypedTensor<f32>,
     bias: &TypedTensor<f32>,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // "conv" -> 2D convolution
     // "3" -> kernel size: 3x3 (padding: 1)
@@ -776,7 +766,7 @@ pub fn self_attention(
     out_weight: &TypedTensor<f32>,
     out_bias: &TypedTensor<f32>,
     num_h: usize, // Number of heads
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // The model doesn't use in_bias anywhere so I won't support it here.
     // (in other words, in_bias is a zero-vector)
@@ -797,7 +787,8 @@ pub fn self_attention(
 
     let in_bias = in_bias.reshape(&[1, 1, 1, 3 * num_c], backend)?; // [1, 1, 1, d]
 
-    let tensor = [in_weight, tensor].einsum("dc,xycn->xynd", backend)? // [x, y, n, d]
+    let tensor = [in_weight, tensor]
+        .einsum("dc,xycn->xynd", backend)? // [x, y, n, d]
         .add(&in_bias, backend)?; // [x, y, n, d]
 
     // TODO: Maybe I have to consider using views or slices. tenferro supports them.
@@ -849,7 +840,7 @@ pub fn cross_attention(
     out_weight: &TypedTensor<f32>,
     out_bias: &TypedTensor<f32>,
     num_h: usize, // Number of heads
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     /*
     show(&in_weight_q)?;
@@ -916,7 +907,7 @@ pub fn cross_attention(
     }; // [1, h, x, y, n]
     let numerator = tensor.sub(&maximum, backend)?.exp(backend)?; // [p, h, x, y, n]
     let denominator = numerator
-        .reduce_sum(&[0], backend)?
+        .reduce_sum(Some(&[0]), backend)?
         .reshape(&[1, num_h, num_x, num_y, num_n], backend)?; // [1, h, x, y, n]
     let softmax = numerator.div(&denominator, backend)?; // [p, h, x, y, n]
 

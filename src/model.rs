@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::error::Error;
 
 use serde_json::Value;
-use tenferro_cpu::CpuBackend;
+use tenferro_cpu::CpuEngine;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 pub struct Layer {
@@ -88,7 +88,7 @@ pub fn get_model(
     let c2 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![-1.702f32])?;
     let c3 = TypedTensor::<f32>::from_vec_col_major(vec![], vec![1.0f32])?;
 
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
     let prefix = "cond_stage_model.transformer.text_model";
     let id_embd_vecs = {
         let wte = &tensors[&format!("{prefix}.embeddings.token_embedding.weight")];
@@ -243,8 +243,8 @@ pub fn get_dconv(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Dconv, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
-   
+    let mut backend = CpuEngine::serial();
+
     let wc = tensors[&format!("{prefix}.weight")] // [o, i, y, x]
         .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
     let bc = tensors[&format!("{prefix}.bias")].duplicate()?; // [o]
@@ -255,12 +255,12 @@ pub fn get_dconv(
 
 // Decoder residual block
 pub struct Drblock {
-    pub g1: TypedTensor<f32>, // [c]
-    pub t1: TypedTensor<f32>, // [c]
+    pub g1: TypedTensor<f32>,  // [c]
+    pub t1: TypedTensor<f32>,  // [c]
     pub wc1: TypedTensor<f32>, // [x, y, i, o]
     pub bc1: TypedTensor<f32>, // [o]
-    pub g2: TypedTensor<f32>, // [c]
-    pub t2: TypedTensor<f32>, // [c]
+    pub g2: TypedTensor<f32>,  // [c]
+    pub t2: TypedTensor<f32>,  // [c]
     pub wc2: TypedTensor<f32>, // [x, y, i, o]
     pub bc2: TypedTensor<f32>, // [o]
 }
@@ -269,7 +269,7 @@ pub fn get_drblock(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Drblock, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
     let g1 = tensors[&format!("{prefix}.norm1.weight")].duplicate()?;
     let t1 = tensors[&format!("{prefix}.norm1.bias")].duplicate()?;
@@ -282,18 +282,27 @@ pub fn get_drblock(
         .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
     let bc2 = tensors[&format!("{prefix}.conv2.bias")].duplicate()?;
 
-    let x = Drblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2 };
+    let x = Drblock {
+        g1,
+        t1,
+        wc1,
+        bc1,
+        g2,
+        t2,
+        wc2,
+        bc2,
+    };
     Ok(x)
 }
 
 // Decoder residual block w/ additional convolution
 pub struct Drcblock {
-    pub g1: TypedTensor<f32>, // [c]
-    pub t1: TypedTensor<f32>, // [c]
+    pub g1: TypedTensor<f32>,  // [c]
+    pub t1: TypedTensor<f32>,  // [c]
     pub wc1: TypedTensor<f32>, // [x, y, i, o]
     pub bc1: TypedTensor<f32>, // [o]
-    pub g2: TypedTensor<f32>, // [c]
-    pub t2: TypedTensor<f32>, // [c]
+    pub g2: TypedTensor<f32>,  // [c]
+    pub t2: TypedTensor<f32>,  // [c]
     pub wc2: TypedTensor<f32>, // [x, y, i, o]
     pub bc2: TypedTensor<f32>, // [o]
     pub wc3: TypedTensor<f32>, // [x, y, i, o]
@@ -304,7 +313,7 @@ pub fn get_drcblock(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Drcblock, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
     let g1 = tensors[&format!("{prefix}.norm1.weight")].duplicate()?;
     let t1 = tensors[&format!("{prefix}.norm1.bias")].duplicate()?;
@@ -320,14 +329,25 @@ pub fn get_drcblock(
         .transpose(&[3, 2, 1, 0], &mut backend)?; // [x, y, i, o]
     let bc3 = tensors[&format!("{prefix}.nin_shortcut.bias")].duplicate()?;
 
-    let x = Drcblock { g1, t1, wc1, bc1, g2, t2, wc2, bc2, wc3, bc3 };
+    let x = Drcblock {
+        g1,
+        t1,
+        wc1,
+        bc1,
+        g2,
+        t2,
+        wc2,
+        bc2,
+        wc3,
+        bc3,
+    };
     Ok(x)
 }
 
 // Decoder attention block
 pub struct Dablock {
-    pub g: TypedTensor<f32>, // [c]
-    pub t: TypedTensor<f32>, // [c]
+    pub g: TypedTensor<f32>,  // [c]
+    pub t: TypedTensor<f32>,  // [c]
     pub w1: TypedTensor<f32>, // [d, c]
     pub b1: TypedTensor<f32>, // [d]
     pub w2: TypedTensor<f32>, // [c, C]
@@ -338,14 +358,14 @@ pub fn get_dablock(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Dablock, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
     let g = tensors[&format!("{prefix}.norm.weight")].duplicate()?;
     let t = tensors[&format!("{prefix}.norm.bias")].duplicate()?;
 
     //     +---+
     //     | Q |                T
-    //     +---+   +---+---+---+ 
+    //     +---+   +---+---+---+
     // W = | K | = | Qᵀ| Kᵀ| Vᵀ|
     //     +---+   +---+---+---+
     //     | V |
@@ -353,13 +373,26 @@ pub fn get_dablock(
 
     let w1 = {
         let mut colmaj = Vec::new();
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.q.weight")].transpose(&[3, 2, 1, 0], &mut backend)?.host_data()?);
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.k.weight")].transpose(&[3, 2, 1, 0], &mut backend)?.host_data()?);
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.v.weight")].transpose(&[3, 2, 1, 0], &mut backend)?.host_data()?);
+        colmaj.extend_from_slice(
+            tensors[&format!("{prefix}.q.weight")]
+                .transpose(&[3, 2, 1, 0], &mut backend)?
+                .host_data()?,
+        );
+        colmaj.extend_from_slice(
+            tensors[&format!("{prefix}.k.weight")]
+                .transpose(&[3, 2, 1, 0], &mut backend)?
+                .host_data()?,
+        );
+        colmaj.extend_from_slice(
+            tensors[&format!("{prefix}.v.weight")]
+                .transpose(&[3, 2, 1, 0], &mut backend)?
+                .host_data()?,
+        );
 
         let a = tensors[&format!("{prefix}.q.weight")].shape()[0];
 
-        TypedTensor::<f32>::from_vec_col_major(vec![a, a * 3], colmaj)?.transpose(&[1, 0], &mut backend)?
+        TypedTensor::<f32>::from_vec_col_major(vec![a, a * 3], colmaj)?
+            .transpose(&[1, 0], &mut backend)?
     };
 
     let b1 = {
@@ -381,7 +414,14 @@ pub fn get_dablock(
 
     let b2 = tensors[&format!("{prefix}.proj_out.bias")].duplicate()?;
 
-    let x = Dablock { g, t, w1, b1, w2, b2 };
+    let x = Dablock {
+        g,
+        t,
+        w1,
+        b1,
+        w2,
+        b2,
+    };
     Ok(x)
 }
 
@@ -485,15 +525,15 @@ pub fn get_dmodel(tensors: &HashMap<String, TypedTensor<f32>>) -> Result<Dmodel,
 
 // Diffusion convolution
 pub struct Fconv {
-    pub wc: TypedTensor<f32>,  // [x, y, i, o]
-    pub bc: TypedTensor<f32>,  // [o]
+    pub wc: TypedTensor<f32>, // [x, y, i, o]
+    pub bc: TypedTensor<f32>, // [o]
 }
 
 pub fn get_fconv(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Fconv, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
     let wc = tensors[&format!("{prefix}.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc = tensors[&format!("{prefix}.bias")].duplicate()?;
@@ -521,20 +561,33 @@ pub fn get_frblock(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Frblock, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
-    let g1  = tensors[&format!("{prefix}.in_layers.0.weight")].duplicate()?;
-    let t1  = tensors[&format!("{prefix}.in_layers.0.bias")].duplicate()?;
-    let wc1 = tensors[&format!("{prefix}.in_layers.2.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let g1 = tensors[&format!("{prefix}.in_layers.0.weight")].duplicate()?;
+    let t1 = tensors[&format!("{prefix}.in_layers.0.bias")].duplicate()?;
+    let wc1 =
+        tensors[&format!("{prefix}.in_layers.2.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc1 = tensors[&format!("{prefix}.in_layers.2.bias")].duplicate()?;
-    let w   = tensors[&format!("{prefix}.emb_layers.1.weight")].duplicate()?;
-    let b   = tensors[&format!("{prefix}.emb_layers.1.bias")].duplicate()?;
-    let g2  = tensors[&format!("{prefix}.out_layers.0.weight")].duplicate()?;
-    let t2  = tensors[&format!("{prefix}.out_layers.0.bias")].duplicate()?;
-    let wc2 = tensors[&format!("{prefix}.out_layers.3.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let w = tensors[&format!("{prefix}.emb_layers.1.weight")].duplicate()?;
+    let b = tensors[&format!("{prefix}.emb_layers.1.bias")].duplicate()?;
+    let g2 = tensors[&format!("{prefix}.out_layers.0.weight")].duplicate()?;
+    let t2 = tensors[&format!("{prefix}.out_layers.0.bias")].duplicate()?;
+    let wc2 =
+        tensors[&format!("{prefix}.out_layers.3.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc2 = tensors[&format!("{prefix}.out_layers.3.bias")].duplicate()?;
 
-    let x = Frblock { g1, t1, wc1, bc1, w, b, g2, t2, wc2, bc2 };
+    let x = Frblock {
+        g1,
+        t1,
+        wc1,
+        bc1,
+        w,
+        b,
+        g2,
+        t2,
+        wc2,
+        bc2,
+    };
     Ok(x)
 }
 
@@ -558,22 +611,38 @@ pub fn get_frcblock(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Frcblock, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
-    let g1  = tensors[&format!("{prefix}.in_layers.0.weight")].duplicate()?;
-    let t1  = tensors[&format!("{prefix}.in_layers.0.bias")].duplicate()?;
-    let wc1 = tensors[&format!("{prefix}.in_layers.2.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let g1 = tensors[&format!("{prefix}.in_layers.0.weight")].duplicate()?;
+    let t1 = tensors[&format!("{prefix}.in_layers.0.bias")].duplicate()?;
+    let wc1 =
+        tensors[&format!("{prefix}.in_layers.2.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc1 = tensors[&format!("{prefix}.in_layers.2.bias")].duplicate()?;
-    let w   = tensors[&format!("{prefix}.emb_layers.1.weight")].duplicate()?;
-    let b   = tensors[&format!("{prefix}.emb_layers.1.bias")].duplicate()?;
-    let g2  = tensors[&format!("{prefix}.out_layers.0.weight")].duplicate()?;
-    let t2  = tensors[&format!("{prefix}.out_layers.0.bias")].duplicate()?;
-    let wc2 = tensors[&format!("{prefix}.out_layers.3.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let w = tensors[&format!("{prefix}.emb_layers.1.weight")].duplicate()?;
+    let b = tensors[&format!("{prefix}.emb_layers.1.bias")].duplicate()?;
+    let g2 = tensors[&format!("{prefix}.out_layers.0.weight")].duplicate()?;
+    let t2 = tensors[&format!("{prefix}.out_layers.0.bias")].duplicate()?;
+    let wc2 =
+        tensors[&format!("{prefix}.out_layers.3.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc2 = tensors[&format!("{prefix}.out_layers.3.bias")].duplicate()?;
-    let wc3 = tensors[&format!("{prefix}.skip_connection.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let wc3 = tensors[&format!("{prefix}.skip_connection.weight")]
+        .transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc3 = tensors[&format!("{prefix}.skip_connection.bias")].duplicate()?;
 
-    let x = Frcblock { g1, t1, wc1, bc1, w, b, g2, t2, wc2, bc2, wc3, bc3 };
+    let x = Frcblock {
+        g1,
+        t1,
+        wc1,
+        bc1,
+        w,
+        b,
+        g2,
+        t2,
+        wc2,
+        bc2,
+        wc3,
+        bc3,
+    };
     Ok(x)
 }
 
@@ -612,53 +681,91 @@ pub fn get_fablock(
     tensors: &HashMap<String, TypedTensor<f32>>,
     prefix: &str,
 ) -> Result<Fablock, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
-    let g1   = tensors[&format!("{prefix}.norm.weight")].duplicate()?;
-    let t1   = tensors[&format!("{prefix}.norm.bias")].duplicate()?;
-    let wc1  = tensors[&format!("{prefix}.proj_in.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
-    let bc1  = tensors[&format!("{prefix}.proj_in.bias")].duplicate()?;
+    let g1 = tensors[&format!("{prefix}.norm.weight")].duplicate()?;
+    let t1 = tensors[&format!("{prefix}.norm.bias")].duplicate()?;
+    let wc1 =
+        tensors[&format!("{prefix}.proj_in.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let bc1 = tensors[&format!("{prefix}.proj_in.bias")].duplicate()?;
 
-    let g2   = tensors[&format!("{prefix}.transformer_blocks.0.norm1.weight")].duplicate()?;
-    let t2   = tensors[&format!("{prefix}.transformer_blocks.0.norm1.bias")].duplicate()?;
+    let g2 = tensors[&format!("{prefix}.transformer_blocks.0.norm1.weight")].duplicate()?;
+    let t2 = tensors[&format!("{prefix}.transformer_blocks.0.norm1.bias")].duplicate()?;
 
     let w21 = {
         let mut colmaj = Vec::new();
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_q.weight")].transpose(&[1, 0], &mut backend)?.host_data()?);
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_k.weight")].transpose(&[1, 0], &mut backend)?.host_data()?);
-        colmaj.extend_from_slice(tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_v.weight")].transpose(&[1, 0], &mut backend)?.host_data()?);
+        colmaj.extend_from_slice(
+            tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_q.weight")]
+                .transpose(&[1, 0], &mut backend)?
+                .host_data()?,
+        );
+        colmaj.extend_from_slice(
+            tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_k.weight")]
+                .transpose(&[1, 0], &mut backend)?
+                .host_data()?,
+        );
+        colmaj.extend_from_slice(
+            tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_v.weight")]
+                .transpose(&[1, 0], &mut backend)?
+                .host_data()?,
+        );
 
         let a = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_q.weight")].shape()[0];
 
-        TypedTensor::<f32>::from_vec_col_major(vec![a, a * 3], colmaj)?.transpose(&[1, 0], &mut backend)?
+        TypedTensor::<f32>::from_vec_col_major(vec![a, a * 3], colmaj)?
+            .transpose(&[1, 0], &mut backend)?
     };
 
     // No bias (b21). Use zero vector.
-    let w22  = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.weight")].duplicate()?;
-    let b22  = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.bias")].duplicate()?;
+    let w22 =
+        tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.weight")].duplicate()?;
+    let b22 = tensors[&format!("{prefix}.transformer_blocks.0.attn1.to_out.0.bias")].duplicate()?;
 
-    let g3   = tensors[&format!("{prefix}.transformer_blocks.0.norm2.weight")].duplicate()?;
-    let t3   = tensors[&format!("{prefix}.transformer_blocks.0.norm2.bias")].duplicate()?;
+    let g3 = tensors[&format!("{prefix}.transformer_blocks.0.norm2.weight")].duplicate()?;
+    let t3 = tensors[&format!("{prefix}.transformer_blocks.0.norm2.bias")].duplicate()?;
     let w31q = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_q.weight")].duplicate()?;
     let w31k = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_k.weight")].duplicate()?;
     let w31v = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_v.weight")].duplicate()?;
-    let w32  = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.weight" )].duplicate()?;
-    let b32  = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.bias" )].duplicate()?;
+    let w32 =
+        tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.weight")].duplicate()?;
+    let b32 = tensors[&format!("{prefix}.transformer_blocks.0.attn2.to_out.0.bias")].duplicate()?;
 
-    let g4   = tensors[&format!("{prefix}.transformer_blocks.0.norm3.weight")].duplicate()?;
-    let t4   = tensors[&format!("{prefix}.transformer_blocks.0.norm3.bias")].duplicate()?;
-    let w41  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.weight")].duplicate()?;
-    let b41  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.bias")].duplicate()?;
-    let w42  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.weight")].duplicate()?;
-    let b42  = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.bias")].duplicate()?;
-    let wc4  = tensors[&format!("{prefix}.proj_out.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
-    let bc4  = tensors[&format!("{prefix}.proj_out.bias")].duplicate()?;
+    let g4 = tensors[&format!("{prefix}.transformer_blocks.0.norm3.weight")].duplicate()?;
+    let t4 = tensors[&format!("{prefix}.transformer_blocks.0.norm3.bias")].duplicate()?;
+    let w41 =
+        tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.weight")].duplicate()?;
+    let b41 = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.0.proj.bias")].duplicate()?;
+    let w42 = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.weight")].duplicate()?;
+    let b42 = tensors[&format!("{prefix}.transformer_blocks.0.ff.net.2.bias")].duplicate()?;
+    let wc4 =
+        tensors[&format!("{prefix}.proj_out.weight")].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let bc4 = tensors[&format!("{prefix}.proj_out.bias")].duplicate()?;
 
     let x = Fablock {
-        g1, t1, wc1, bc1,
-        g2, t2, w21, w22, b22,
-        g3, t3, w31q, w31k, w31v, w32, b32,
-        g4, t4, w41, b41, w42, b42, wc4, bc4,
+        g1,
+        t1,
+        wc1,
+        bc1,
+        g2,
+        t2,
+        w21,
+        w22,
+        b22,
+        g3,
+        t3,
+        w31q,
+        w31k,
+        w31v,
+        w32,
+        b32,
+        g4,
+        t4,
+        w41,
+        b41,
+        w42,
+        b42,
+        wc4,
+        bc4,
     };
     Ok(x)
 }
@@ -726,7 +833,7 @@ pub struct Fmodel {
 }
 
 pub fn get_fmodel(tensors: &HashMap<String, TypedTensor<f32>>) -> Result<Fmodel, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
 
     let time_w1 = tensors["model.diffusion_model.time_embed.0.weight"].duplicate()?;
     let time_b1 = tensors["model.diffusion_model.time_embed.0.bias"].duplicate()?;
@@ -741,50 +848,51 @@ pub fn get_fmodel(tensors: &HashMap<String, TypedTensor<f32>>) -> Result<Fmodel,
     let fconv_o5 = get_fconv(tensors, "model.diffusion_model.output_blocks.5.2.conv")?;
     let fconv_o8 = get_fconv(tensors, "model.diffusion_model.output_blocks.8.2.conv")?;
 
-    let frblock_i1  = get_frblock(tensors, "model.diffusion_model.input_blocks.1.0")?;
-    let frblock_i2  = get_frblock(tensors, "model.diffusion_model.input_blocks.2.0")?;
-    let frblock_i5  = get_frblock(tensors, "model.diffusion_model.input_blocks.5.0")?;
-    let frblock_i8  = get_frblock(tensors, "model.diffusion_model.input_blocks.8.0")?;
+    let frblock_i1 = get_frblock(tensors, "model.diffusion_model.input_blocks.1.0")?;
+    let frblock_i2 = get_frblock(tensors, "model.diffusion_model.input_blocks.2.0")?;
+    let frblock_i5 = get_frblock(tensors, "model.diffusion_model.input_blocks.5.0")?;
+    let frblock_i8 = get_frblock(tensors, "model.diffusion_model.input_blocks.8.0")?;
     let frblock_i10 = get_frblock(tensors, "model.diffusion_model.input_blocks.10.0")?;
     let frblock_i11 = get_frblock(tensors, "model.diffusion_model.input_blocks.11.0")?;
-    let frblock_m0  = get_frblock(tensors, "model.diffusion_model.middle_block.0")?;
-    let frblock_m2  = get_frblock(tensors, "model.diffusion_model.middle_block.2")?;
+    let frblock_m0 = get_frblock(tensors, "model.diffusion_model.middle_block.0")?;
+    let frblock_m2 = get_frblock(tensors, "model.diffusion_model.middle_block.2")?;
 
-    let frcblock_i4  = get_frcblock(tensors, "model.diffusion_model.input_blocks.4.0")?;
-    let frcblock_i7  = get_frcblock(tensors, "model.diffusion_model.input_blocks.7.0")?;
-    let frcblock_o0  = get_frcblock(tensors, "model.diffusion_model.output_blocks.0.0")?;
-    let frcblock_o1  = get_frcblock(tensors, "model.diffusion_model.output_blocks.1.0")?;
-    let frcblock_o2  = get_frcblock(tensors, "model.diffusion_model.output_blocks.2.0")?;
-    let frcblock_o3  = get_frcblock(tensors, "model.diffusion_model.output_blocks.3.0")?;
-    let frcblock_o4  = get_frcblock(tensors, "model.diffusion_model.output_blocks.4.0")?;
-    let frcblock_o5  = get_frcblock(tensors, "model.diffusion_model.output_blocks.5.0")?;
-    let frcblock_o6  = get_frcblock(tensors, "model.diffusion_model.output_blocks.6.0")?;
-    let frcblock_o7  = get_frcblock(tensors, "model.diffusion_model.output_blocks.7.0")?;
-    let frcblock_o8  = get_frcblock(tensors, "model.diffusion_model.output_blocks.8.0")?;
-    let frcblock_o9  = get_frcblock(tensors, "model.diffusion_model.output_blocks.9.0")?;
+    let frcblock_i4 = get_frcblock(tensors, "model.diffusion_model.input_blocks.4.0")?;
+    let frcblock_i7 = get_frcblock(tensors, "model.diffusion_model.input_blocks.7.0")?;
+    let frcblock_o0 = get_frcblock(tensors, "model.diffusion_model.output_blocks.0.0")?;
+    let frcblock_o1 = get_frcblock(tensors, "model.diffusion_model.output_blocks.1.0")?;
+    let frcblock_o2 = get_frcblock(tensors, "model.diffusion_model.output_blocks.2.0")?;
+    let frcblock_o3 = get_frcblock(tensors, "model.diffusion_model.output_blocks.3.0")?;
+    let frcblock_o4 = get_frcblock(tensors, "model.diffusion_model.output_blocks.4.0")?;
+    let frcblock_o5 = get_frcblock(tensors, "model.diffusion_model.output_blocks.5.0")?;
+    let frcblock_o6 = get_frcblock(tensors, "model.diffusion_model.output_blocks.6.0")?;
+    let frcblock_o7 = get_frcblock(tensors, "model.diffusion_model.output_blocks.7.0")?;
+    let frcblock_o8 = get_frcblock(tensors, "model.diffusion_model.output_blocks.8.0")?;
+    let frcblock_o9 = get_frcblock(tensors, "model.diffusion_model.output_blocks.9.0")?;
     let frcblock_o10 = get_frcblock(tensors, "model.diffusion_model.output_blocks.10.0")?;
     let frcblock_o11 = get_frcblock(tensors, "model.diffusion_model.output_blocks.11.0")?;
 
-    let fablock_i1  = get_fablock(tensors, "model.diffusion_model.input_blocks.1.1")?;
-    let fablock_i2  = get_fablock(tensors, "model.diffusion_model.input_blocks.2.1")?;
-    let fablock_i4  = get_fablock(tensors, "model.diffusion_model.input_blocks.4.1")?;
-    let fablock_i5  = get_fablock(tensors, "model.diffusion_model.input_blocks.5.1")?;
-    let fablock_i7  = get_fablock(tensors, "model.diffusion_model.input_blocks.7.1")?;
-    let fablock_i8  = get_fablock(tensors, "model.diffusion_model.input_blocks.8.1")?;
-    let fablock_m1  = get_fablock(tensors, "model.diffusion_model.middle_block.1")?;
-    let fablock_o3  = get_fablock(tensors, "model.diffusion_model.output_blocks.3.1")?;
-    let fablock_o4  = get_fablock(tensors, "model.diffusion_model.output_blocks.4.1")?;
-    let fablock_o5  = get_fablock(tensors, "model.diffusion_model.output_blocks.5.1")?;
-    let fablock_o6  = get_fablock(tensors, "model.diffusion_model.output_blocks.6.1")?;
-    let fablock_o7  = get_fablock(tensors, "model.diffusion_model.output_blocks.7.1")?;
-    let fablock_o8  = get_fablock(tensors, "model.diffusion_model.output_blocks.8.1")?;
-    let fablock_o9  = get_fablock(tensors, "model.diffusion_model.output_blocks.9.1")?;
+    let fablock_i1 = get_fablock(tensors, "model.diffusion_model.input_blocks.1.1")?;
+    let fablock_i2 = get_fablock(tensors, "model.diffusion_model.input_blocks.2.1")?;
+    let fablock_i4 = get_fablock(tensors, "model.diffusion_model.input_blocks.4.1")?;
+    let fablock_i5 = get_fablock(tensors, "model.diffusion_model.input_blocks.5.1")?;
+    let fablock_i7 = get_fablock(tensors, "model.diffusion_model.input_blocks.7.1")?;
+    let fablock_i8 = get_fablock(tensors, "model.diffusion_model.input_blocks.8.1")?;
+    let fablock_m1 = get_fablock(tensors, "model.diffusion_model.middle_block.1")?;
+    let fablock_o3 = get_fablock(tensors, "model.diffusion_model.output_blocks.3.1")?;
+    let fablock_o4 = get_fablock(tensors, "model.diffusion_model.output_blocks.4.1")?;
+    let fablock_o5 = get_fablock(tensors, "model.diffusion_model.output_blocks.5.1")?;
+    let fablock_o6 = get_fablock(tensors, "model.diffusion_model.output_blocks.6.1")?;
+    let fablock_o7 = get_fablock(tensors, "model.diffusion_model.output_blocks.7.1")?;
+    let fablock_o8 = get_fablock(tensors, "model.diffusion_model.output_blocks.8.1")?;
+    let fablock_o9 = get_fablock(tensors, "model.diffusion_model.output_blocks.9.1")?;
     let fablock_o10 = get_fablock(tensors, "model.diffusion_model.output_blocks.10.1")?;
     let fablock_o11 = get_fablock(tensors, "model.diffusion_model.output_blocks.11.1")?;
 
-    let g_final  = tensors["model.diffusion_model.out.0.weight"].duplicate()?;
-    let t_final  = tensors["model.diffusion_model.out.0.bias"].duplicate()?;
-    let wc_final = tensors["model.diffusion_model.out.2.weight"].transpose(&[3, 2, 1, 0], &mut backend)?;
+    let g_final = tensors["model.diffusion_model.out.0.weight"].duplicate()?;
+    let t_final = tensors["model.diffusion_model.out.0.bias"].duplicate()?;
+    let wc_final =
+        tensors["model.diffusion_model.out.2.weight"].transpose(&[3, 2, 1, 0], &mut backend)?;
     let bc_final = tensors["model.diffusion_model.out.2.bias"].duplicate()?;
 
     let x = Fmodel {
@@ -801,28 +909,28 @@ pub fn get_fmodel(tensors: &HashMap<String, TypedTensor<f32>>) -> Result<Fmodel,
         fconv_o5,
         fconv_o8,
 
-        frblock_i1,  
-        frblock_i2,  
-        frblock_i5,  
-        frblock_i8,  
-        frblock_i10, 
-        frblock_i11, 
-        frblock_m0,  
+        frblock_i1,
+        frblock_i2,
+        frblock_i5,
+        frblock_i8,
+        frblock_i10,
+        frblock_i11,
+        frblock_m0,
         frblock_m2,
 
-        frcblock_i4,  
-        frcblock_i7,  
-        frcblock_o0,  
-        frcblock_o1,  
-        frcblock_o2,  
-        frcblock_o3,  
-        frcblock_o4,  
-        frcblock_o5,  
-        frcblock_o6,  
-        frcblock_o7,  
-        frcblock_o8,  
-        frcblock_o9,  
-        frcblock_o10, 
+        frcblock_i4,
+        frcblock_i7,
+        frcblock_o0,
+        frcblock_o1,
+        frcblock_o2,
+        frcblock_o3,
+        frcblock_o4,
+        frcblock_o5,
+        frcblock_o6,
+        frcblock_o7,
+        frcblock_o8,
+        frcblock_o9,
+        frcblock_o10,
         frcblock_o11,
 
         fablock_i1,

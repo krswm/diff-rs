@@ -20,7 +20,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 
-use tenferro_cpu::CpuBackend;
+use tenferro_cpu::CpuEngine;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
 pub fn save_as_netppm_image(tensor: &TypedTensor<f32>, path: &str) -> Result<(), Box<dyn Error>> {
@@ -44,7 +44,7 @@ pub fn save_as_netppm_image(tensor: &TypedTensor<f32>, path: &str) -> Result<(),
     // 0.9921875 is -----
     //               128
 
-    let mut backend = CpuBackend::new();
+    let mut backend = CpuEngine::serial();
     let one = TypedTensor::<f32>::from_vec_col_major(vec![], vec![1.0])?;
     let tensor = tensor.add(&one, &mut backend)?;
     let a_hundred_and_twenty_eight = TypedTensor::<f32>::from_vec_col_major(vec![], vec![128.0])?;
@@ -67,6 +67,6 @@ pub fn save_as_netppm_image(tensor: &TypedTensor<f32>, path: &str) -> Result<(),
             file.write_all(format!("{r:.0} {g:.0} {b:.0}\n").as_bytes())?;
         }
     }
-    
+
     Ok(())
 }

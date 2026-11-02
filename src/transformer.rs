@@ -17,7 +17,7 @@
 use std::error::Error;
 use std::iter::zip;
 
-use tenferro_cpu::CpuBackend;
+use tenferro_cpu::CpuEngine;
 use tenferro_einsum::TypedTensorEinsumExt;
 use tenferro_runtime::{TypedTensor, TypedTensorSessionOpsExt};
 
@@ -28,10 +28,10 @@ fn layer_norm(
     g: &TypedTensor<f32>,
     t: &TypedTensor<f32>,
     model: &Model,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // mean(x) = sum(x) / n_embd
-    let mean = x.reduce_sum(&[0], backend)?.mul(&model.c0, backend)?;
+    let mean = x.reduce_sum(Some(&[0]), backend)?.mul(&model.c0, backend)?;
 
     // x .- mean(x)
     let numerator = x.sub(&mean, backend)?;
@@ -41,7 +41,7 @@ fn layer_norm(
     // var(x, corrected = false) = sum((x .- mean(x)) .^ 2) / n_embd
     let var = numerator
         .mul(&numerator, backend)?
-        .reduce_sum(&[0], backend)?
+        .reduce_sum(Some(&[0]), backend)?
         .mul(&model.c0, backend)?;
 
     // √(var(x, corrected = false) + model.e)
@@ -63,7 +63,7 @@ fn multi_head_attention(
     v_colmaj: &mut Vec<f32>,
     pos: usize,
     model: &Model,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // x = layer.w11 * x + layer.b11
     let x = layer.w11.matmul(x, backend)?.add(&layer.b11, backend)?;
@@ -219,7 +219,7 @@ fn multi_head_attention(
 
     // sum(y .- maximum(y))
     let denominator = numerator
-        .reduce_sum(&[0], backend)?
+        .reduce_sum(Some(&[0]), backend)?
         .reshape(&[1, model.n_head], backend)?;
     // 1D `TypedTensor`:
     //    ┏━━━━━━━━┓
@@ -288,7 +288,7 @@ fn feed_forward(
     x: &TypedTensor<f32>,
     layer: &Layer,
     model: &Model,
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // x = layer.w21 * x + layer.b21
     let x = layer.w21.matmul(x, backend)?.add(&layer.b21, backend)?;
@@ -316,7 +316,7 @@ pub fn transformer(
     model: &Model,
     k_colmaj_caches: &mut [Vec<f32>],
     v_colmaj_caches: &mut [Vec<f32>],
-    backend: &mut CpuBackend,
+    backend: &mut CpuEngine,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
     // x = model.wte[:, id+1] + model.wpe[:, pos]
     let mut x = model.id_embd_vecs[id].add(&model.pos_embd_vecs[pos], backend)?;

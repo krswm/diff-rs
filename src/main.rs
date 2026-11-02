@@ -23,7 +23,7 @@ use std::time::Instant;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
 use serde_json::Value;
-use tenferro_cpu::CpuBackend;
+use tenferro_cpu::CpuEngine;
 use tenferro_runtime::TypedTensor;
 
 pub mod decoder;
@@ -41,8 +41,8 @@ fn get_prompt_embedding(
     model: &crate::model::Model,
     prompt: &str,
 ) -> Result<TypedTensor<f32>, Box<dyn Error>> {
-    let mut backend = CpuBackend::new();
-    
+    let mut backend = CpuEngine::serial();
+
     // ==== Tokenization ====
 
     // Token IDs
@@ -141,7 +141,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let positive_x = get_prompt_embedding(&token_to_id, &ranks, &model, &args[3])?;
     let negative_x = get_prompt_embedding(&token_to_id, &ranks, &model, &args[4])?;
 
-
     let x = {
         let mut colmaj = Vec::new();
         colmaj.extend_from_slice(positive_x.host_data()?);
@@ -161,16 +160,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut rng = ChaCha20Rng::seed_from_u64(2269);
     let tensor = util::randn(vec![64, 64, 4, 1], &mut rng)?;
 
-    let tensor = unet::forward(&tensor, &x, 900,  800, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 800,  700, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 700,  600, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 600,  500, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 500,  400, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 400,  300, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 300,  200, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 200,  100, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x, 100,    0, &fmodel, &mut rng)?;
-    let tensor = unet::forward(&tensor, &x,   0, -100, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 900, 800, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 800, 700, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 700, 600, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 600, 500, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 500, 400, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 400, 300, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 300, 200, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 200, 100, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 100, 0, &fmodel, &mut rng)?;
+    let tensor = unet::forward(&tensor, &x, 0, -100, &fmodel, &mut rng)?;
 
     println!("==== Decoding Process ====");
 
@@ -178,10 +177,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     saver::save_as_netppm_image(&tensor, &args[2])?;
 
     println!("==== Process Finished ====");
-    println!("AI-Generated image saved at {} (PPM image format)", &args[2]);
+    println!(
+        "AI-Generated image saved at {} (PPM image format)",
+        &args[2]
+    );
 
     let performance_time = performance_timer.elapsed().as_secs_f64();
     println!("time taken: {performance_time} s");
-    
+
     Ok(())
 }
